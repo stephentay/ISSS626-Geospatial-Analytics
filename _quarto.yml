@@ -5,13 +5,18 @@ website:
   title: "ISSS626-Geospatial-Analytics"
   navbar:
     left:
+    - text: "Hands-on Exercise"
+      menu: 
+        - text: "Hands-on Ex 1"
+          href: "Hands-on_Ex/Hands-on_Ex01/Hands-on_Ex01.html"
+    right:
       - href: index.qmd
         text: Home
       - about.qmd
 
 format:
   html:
-    theme: cosmo
+    theme: flatly
     css: styles.css
     toc: true
 
