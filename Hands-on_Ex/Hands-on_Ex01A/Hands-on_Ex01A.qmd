@@ -29,21 +29,32 @@ preschool <- st_read("data/geospatial/PreSchoolsLocation.kml")
 
 1.5
 
+::: {.panel-tabset}
+## st_geometry()
 ```{r}
 st_geometry(mpsz)
 ```
 
+## glimpse()
 1.5.2
 
 ```{r}
 glimpse(mpsz)
 ```
 
+## head()
 1.5.3
 
 ```{r}
 head(mpsz, n=5)
 ```
+
+:::
+
+:::{.callout-note}
+Note that there are five types of callouts, including:
+`note`, `tip`, `warning`, `caution`, and `important`.
+:::
 
 1.6
 

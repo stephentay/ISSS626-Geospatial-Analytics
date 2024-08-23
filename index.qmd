@@ -1,5 +1,12 @@
 ---
-title: "ISSS626-Geospatial-Analytics"
+title: ""
 ---
 
-**Geospatial Analytics (ISSS626)** by Stephen Tay
+::: cover-image
+::: cover-title
+**Geospatial Data Science & Analytics**
+:::
+::: cover-author
+by Stephen Tay
+:::
+:::

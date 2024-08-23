@@ -2,7 +2,7 @@ project:
   type: website
 
 website:
-  title: "ISSS626-Geospatial-Analytics"
+  title: "Geospatial Analytics (ISSS626)"
   navbar:
     left:
     - text: "Hands-on Exercise"
@@ -16,7 +16,6 @@ website:
     right:
       - href: index.qmd
         text: Home
-      - about.qmd
 
 format:
   html:

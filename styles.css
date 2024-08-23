@@ -1,1 +1,40 @@
 /* css styles */
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden; /* Prevents scroll bars from appearing */
+}
+
+/* Full-page background image using absolute positioning */
+.cover-image {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: url('geospatial-analytics.png'); /* Adjust path as needed */
+  background-size: cover; /* Ensures the image covers the entire container */
+  background-repeat: no-repeat; /* Prevents the image from repeating */
+  background-position: center; /* Centers the image */
+  display: flex;
+  justify-content: flex-start;
+  align-items: flex-start;
+  color: white;
+  padding: 50px 50px;
+}
+
+.cover-title {
+  text-align: left;
+  font-size: 2em;
+  margin-top: 1em;
+  color: black; 
+}
+
+.cover-author {
+  text-align: left;
+  font-size: 1.25em; 
+  margin-top: 4em;
+  margin-left: -25.5em;
+  color: #003f5c; 
+}
