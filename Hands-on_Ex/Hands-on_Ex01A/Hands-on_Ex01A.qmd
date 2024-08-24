@@ -1,122 +1,160 @@
 ---
 title: "Hands-on Ex 1A"
+subtitle: "Geospatial Data Science with R"
 author: "Stephen Tay"
+date: "24 Aug 2024"
+output:
+  html_document:
+    number_sections: yes
+    theme: united
+    toc: yes
+    toc_float: yes
+  word_document:
+    toc: yes
+  pdf_document:
+    toc: yes  
 ---
 
-# 1. Getting Started
+# Overview
+This exercise will perform geospatial data science tasks in R using the **sf** package.
 
 ```{r}
 pacman::p_load(sf, tidyverse)
 ```
 
-# 2. Importing Geospatial Data
-
+# Importing Geospatial Data
+We will be importing 3 geospatial dataset using [st_read()]
+::: panel-tabset
+## MP14_SUBZONE_WEB_PL
+Importing polygon feature data in shapefile format
 ```{r}
 mpsz <- st_read(dsn = "data/geospatial", 
                   layer = "MP14_SUBZONE_WEB_PL")
 ```
-
+## CyclingPath
+Importing polyline feature data in shapefile form
 ```{r}
 cyclingpath <- st_read(dsn = "data/geospatial", 
                          layer = "CyclingPathGazette")
 ```
-
+## PreSchoolsLocation
+Importing GIS data in kml format
 ```{r}
 preschool <- st_read("data/geospatial/PreSchoolsLocation.kml")
 ```
+:::
 
-# 3. Checking the Content of A Simple Feature Data Frame
+# Checking the Content of A Simple Feature Data Frame
 
-1.5
-
-::: {.panel-tabset}
+::: panel-tabset
 ## st_geometry()
 ```{r}
 st_geometry(mpsz)
 ```
 
 ## glimpse()
-1.5.2
-
 ```{r}
 glimpse(mpsz)
 ```
 
 ## head()
-1.5.3
-
 ```{r}
 head(mpsz, n=5)
 ```
-
 :::
 
-:::{.callout-note}
-Note that there are five types of callouts, including:
-`note`, `tip`, `warning`, `caution`, and `important`.
-:::
 
-1.6
 
+# Plotting Geospatial Data
+::: panel-tabset
+## plot(mpsz)
 ```{r}
 plot(mpsz)
 ```
 
+## plot(st_geometry(mpsz))
 ```{r}
 plot(st_geometry(mpsz))
 ```
 
+## plot(mpsz["PLN_AREA_N"])
 ```{r}
 plot(mpsz["PLN_AREA_N"])
 ```
+:::
 
-1.7.1
+# Working with Projection
+## Assigning EPSG code to a simple feature data frame
+::: callout-important
+It is important to check the coordinate system of the source data. One of the common issue that can happen during importing geospatial data into R is that the coordinate system of the source data was either missing (such as due to missing .proj for ESRI shapefile) or wrongly assigned during the importing process.
+:::
 
+Here's an example where the EPSG code in the [mpsz] dataset is incorrect. Although mpsz data frame is projected in svy21 but when we read until the end of the print, it indicates that the EPSG is 9001. This is a wrong EPSG code because the correct EPSG code for svy21 should be 3414.
+
+::: panel-tabset
+## 1. Check the CRS
 ```{r}
 st_crs(mpsz)
 ```
 
+## 2. Assign the correct EPSG code
 ```{r}
 mpsz3414 <- st_set_crs(mpsz, 3414)
 ```
 
+## 3. Check the CRS again
+Notice that the EPSG code is 3414 now.
 ```{r}
 st_crs(mpsz3414)
 ```
+::: 
 
-1.7.2
+## Preschool dataset
+::: callout-important
+It is important to transform data from geographic coordinate system to projected coordinate system. This is because geographic coordinate system is not appropriate if the analysis need to use distance or/and area measurements.
+:::
+Here's an example where we need to transform projection of the [preschool] dataset from wgs84 to svy21.
 
+::: panel-tabset
+## 1. Check the CRS
+Notice that it is in wgs84 coordinate system.
+```{r}
+st_crs(preschool)
+```
+
+## 2. Projection transformation
 ```{r}
 preschool3414 <- st_transform(preschool, 
                               crs = 3414)
 st_geometry(preschool3414)
 ```
 
-1.8
+## 3. Check the CRS again
+Notice that it is in svy21 projected coordinate system now.
+```{r}
+st_crs(preschool3414)
+```
+::: 
 
+# Importing & Transforming Aspatial Data
+## Importing
 ```{r}
 listings <- read_csv("data/aspatial/listings.csv")
-```
-
-```{r}
 list(listings)
 ```
 
-1.8.2
-
+## Creating a simple feature data frame from an aspatial data frame
 ```{r}
 listings_sf <- st_as_sf(listings, 
                        coords = c("longitude", "latitude"),
                        crs=4326) %>%
   st_transform(crs = 3414)
-```
-
-```{r}
 glimpse(listings_sf)
 ```
 
-1.9.1
+# Geoprocessing with sf package
 
+## Buffering
 ```{r}
 buffer_cycling <- st_buffer(cyclingpath, dist=5, nQuadSegs = 30)
 buffer_cycling$AREA <- st_area(buffer_cycling)
@@ -126,8 +164,7 @@ buffer_cycling$AREA <- st_area(buffer_cycling)
 sum(buffer_cycling$AREA)
 ```
 
-1.9.2
-
+## Point-in-polygon count
 ```{r}
 mpsz3414$`PreSch Count`<- lengths(st_intersects(mpsz3414, preschool3414))
 ```
@@ -145,8 +182,6 @@ mpsz3414 <- mpsz3414 %>%
   mutate(Area = st_area(.)) %>%
   mutate(`PreSch Density` = `PreSch Count`/Area * 1000000)
 ```
-
-1.10
 
 ```{r}
 hist(mpsz3414$`PreSch Density`)
