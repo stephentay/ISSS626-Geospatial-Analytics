@@ -345,7 +345,7 @@ dbl (2): Pop, Time
 `.groups` argument.</code></pre>
 </div>
 </div>
-<p>Data cleaning to ensure PA and SZ fields are uppercase so that it can be joined to <code>mpsz' table using</code>SUBZONE_N<code>and</code>SZ` as the common identifier.</p>
+<p>Data cleaning to ensure PA and SZ fields are uppercase so that it can be joined to <code>mpsz</code> table using <code>SUBZONE_N</code> and <code>SZ</code> as the common identifier.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>popdata2020 <span class="ot">&lt;-</span> popdata2020 <span class="sc">%&gt;%</span></span>
 <span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate_at</span>(<span class="at">.vars =</span> <span class="fu">vars</span>(PA, SZ), </span>
@@ -427,7 +427,7 @@ dbl (2): Pop, Time
 </div>
 <div id="tabset-3-2" class="tab-pane" role="tabpanel" aria-labelledby="tabset-3-2-tab">
 <p>To draw a choropleth map showing the geographical distribution of a selected variable by planning subzone, we just need to assign the target variable such as Dependency to <code>tm_polygons()</code>.</p>
-<p>The default interval binning used to draw the choropleth map is called “pretty”, and the default colour scheme used is YlOrRd of ColorBrewer. Missing value will be shaded in grey.</p>
+<p>The default interval binning used to draw the choropleth map is called “pretty”, and the default colour scheme used is <code>YlOrRd</code> of ColorBrewer. Missing value will be shaded in grey.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="fu">tm_shape</span>(mpsz_pop2020)<span class="sc">+</span></span>
 <span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tm_polygons</span>(<span class="st">"DEPENDENCY"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
@@ -555,7 +555,7 @@ dbl (2): Pop, Time
 </section>
 <section id="using-customised-breaks" class="level2">
 <h2 class="anchored" data-anchor-id="using-customised-breaks">5.2 Using customised breaks</h2>
-<p>For all the built-in styles, the category breaks are computed internally. In order to override these defaults, the breakpoints can be set explicitly by means of the breaks argument to the tm_fill(). It is important to note that, in tmap the breaks include a minimum and maximum. As a result, in order to end up with n categories, n+1 elements must be specified in the breaks option (the values must be in increasing order).</p>
+<p>For all the built-in styles, the category breaks are computed internally. In order to override these defaults, the breakpoints can be set explicitly by means of the breaks argument to the <code>tm_fill()</code>. It is important to note that, in tmap the breaks include a minimum and maximum. As a result, in order to end up with n categories, n+1 elements must be specified in the breaks option (the values must be in increasing order).</p>
 <p><strong>Step 1</strong>: Get some descriptive statistics on the variable before setting the break points.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb27"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(mpsz_pop2020<span class="sc">$</span>DEPENDENCY)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
@@ -706,9 +706,9 @@ dbl (2): Pop, Time
 </section>
 <section id="drawing-small-multiple-choropleth-maps" class="level1">
 <h1>8. Drawing Small Multiple Choropleth Maps</h1>
-<p>In <strong>tmap</strong>, small multiple maps can be plotted in three ways: by assigning multiple values to at least one of the asthetic arguments, by defining a group-by variable in tm_facets(), and by creating multiple stand-alone maps with tmap_arrange().</p>
+<p>In <strong>tmap</strong>, small multiple maps can be plotted in three ways:</p>
 <div class="tabset-margin-container"></div><div class="panel-tabset">
-<ul class="nav nav-tabs" role="tablist"><li class="nav-item" role="presentation"><a class="nav-link active" id="tabset-7-1-tab" data-bs-toggle="tab" data-bs-target="#tabset-7-1" role="tab" aria-controls="tabset-7-1" aria-selected="true">Assigning values to aesthetic argument</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-7-2-tab" data-bs-toggle="tab" data-bs-target="#tabset-7-2" role="tab" aria-controls="tabset-7-2" aria-selected="false">Defining a group-by variable in <code>tm_facets()</code></a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-7-3-tab" data-bs-toggle="tab" data-bs-target="#tabset-7-3" role="tab" aria-controls="tabset-7-3" aria-selected="false">Combining multiple standalone maps using <code>tmap_arrange()</code></a></li></ul>
+<ul class="nav nav-tabs" role="tablist"><li class="nav-item" role="presentation"><a class="nav-link active" id="tabset-7-1-tab" data-bs-toggle="tab" data-bs-target="#tabset-7-1" role="tab" aria-controls="tabset-7-1" aria-selected="true">1. Assigning values to aesthetic argument(s)</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-7-2-tab" data-bs-toggle="tab" data-bs-target="#tabset-7-2" role="tab" aria-controls="tabset-7-2" aria-selected="false">2. Defining a group-by variable in <code>tm_facets()</code></a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-7-3-tab" data-bs-toggle="tab" data-bs-target="#tabset-7-3" role="tab" aria-controls="tabset-7-3" aria-selected="false">3. Combining multiple standalone maps using <code>tmap_arrange()</code></a></li></ul>
 <div class="tab-content">
 <div id="tabset-7-1" class="tab-pane active" role="tabpanel" aria-labelledby="tabset-7-1-tab">
 <p>In this example, small multiple choropleth maps are created by defining <code>ncols</code> in <code>tm_fill()</code></p>
