@@ -6,6 +6,7 @@ title: ""
 ::: cover-title
 **Geospatial Data Science & Analytics**
 :::
+
 ::: cover-author
 by Stephen Tay
 :::
