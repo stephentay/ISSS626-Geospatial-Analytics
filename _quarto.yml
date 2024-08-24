@@ -2,8 +2,8 @@ project:
   type: website
 
 website:
-  title: "Geospatial Analytics (ISSS626)"
   navbar:
+    logo: 'media/home-icon.svg'
     left:
     - text: "Hands-on Exercise"
       menu: 
@@ -14,8 +14,10 @@ website:
     - text: "In-class Exercise"
     - text: "Take-home Exercise"
     right:
-      - href: index.qmd
-        text: Home
+      - text: '![](media/github-icon.svg)'
+        href: https://github.com/stephentay/ISSS626-Geospatial-Analytics
+      - text: '![](media/linkedin-icon.svg)'
+        href: https://www.linkedin.com/in/stephen-tay/
 
 format:
   html:

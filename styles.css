@@ -13,7 +13,7 @@ html, body {
   left: 0;
   right: 0;
   bottom: 0;
-  background-image: url('geospatial-analytics.png'); /* Adjust path as needed */
+  background-image: url('media/geospatial-analytics.png'); /* Adjust path as needed */
   background-size: cover; /* Ensures the image covers the entire container */
   background-repeat: no-repeat; /* Prevents the image from repeating */
   background-position: center; /* Centers the image */
