@@ -3,6 +3,12 @@ title: "Hands-on Ex 1B"
 subtitle: "Thematic Mapping and GeoVisualisation with R"
 author: "Stephen Tay"
 date: "24 Aug 2024"
+date-modified:  "last-modified"
+execute: 
+  eval: true
+  echo: true
+  message: false
+  freeze: true 
 ---
 
 # 1. Overview

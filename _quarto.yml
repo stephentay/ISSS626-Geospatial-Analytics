@@ -12,11 +12,17 @@ website:
         - text: "Hands-on Ex 1B"
           href: "Hands-on_Ex/Hands-on_Ex01B/Hands-on_Ex01B.html"
     - text: "In-class Exercise"
+      menu: 
+        - text: "In-class Ex 1"
+          href: "In-class_Ex/In-class_Ex01/In-class_Ex01.html"
     - text: "Take-home Exercise"
+      menu: 
+        - text: "Take-home Ex 1"
+          href: "Take-home_Ex/Take-home_Ex01/Take-home_Ex01.html"
     right:
-    - text: '![](media/github-icon.svg)'
+    - icon: github
       href: https://github.com/stephentay/ISSS626-Geospatial-Analytics
-    - text: '![](media/linkedin-icon.svg)'
+    - icon: linkedin
       href: https://www.linkedin.com/in/stephen-tay/
 
 format:
