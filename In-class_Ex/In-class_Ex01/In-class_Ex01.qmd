@@ -11,3 +11,55 @@ execute:
   freeze: true 
 ---
 
+
+# 1. Getting Started
+
+```{r}
+pacman::p_load(sf, tmap, tidyverse, ggstatsplot)
+```
+
+# Working with Master Plan Planning Sub-zone Data
+Importing the shapefile.
+```{r}
+mpsz14_shp <- st_read(dsn = "data/geospatial", 
+                  layer = "MP14_SUBZONE_WEB_PL")
+```
+To write the file to kml, you could use the following code. delete_dsn argument is to overwrite the old file, if any.
+```{r}
+st_write(mpsz14_shp, "data/geospatial/MP_SUBZONE_WEB_PL.kml", delete_dsn = TRUE)
+```
+
+
+```{r}
+mpsz19_kml <- st_read("data/geospatial/MasterPlan2019SubzoneBoundaryNoSeaKML.kml")
+```
+
+```{r}
+mpsz19_shp <- st_read(dsn = "data/geospatial", 
+                  layer = "MPSZ-2019")
+```
+mpsz19 CRS is in WGS 84. So we need to convert it. It is a Geographical Coordinate System, useful in GPS to pinpoint a specific location, and the unit of measurement is in decimal degree. But it is not suitable for geospatial analysis as the distance measurement is distorted, depending on the location you are in. 
+
+```{r}
+mpsz19_shp <- st_read(dsn = "data/geospatial", 
+                  layer = "MPSZ-2019") %>%
+  st_transform(crs = 3414)
+```
+
+
+```{r}
+popdata <- read_csv("data/aspatial/respopagesextod2023.csv")
+```
+
+
+```{r}
+popdata2023 <- popdata %>%
+  group_by(PA, SZ, AG) %>%
+  summarise(`POP` = sum(Pop)) %>%
+  ungroup()
+popdata2023 %>%
+  pivot_wider(names_from = AG,
+              values_from = POP)
+```
+
+
