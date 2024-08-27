@@ -463,7 +463,14 @@ dbl (2): Pop, Time
 [21] "90_and_Over"</code></pre>
 </div>
 </div>
-<p>Now we can sum and create the respective columns: - YOUNG: age group 0-4 until age group 20-24, - ECONOMY ACTIVE: age group 25-29 until age group 60-64, - AGED: age group 65 and above, - TOTAL: all age groups, and - DEPENDENCY: the ratio between young and aged against economy active group</p>
+<p>Now we can sum and create the respective columns:</p>
+<ul>
+<li>YOUNG: age group 0-4 until age group 20-24,</li>
+<li>ECONOMY ACTIVE: age group 25-29 until age group 60-64,</li>
+<li>AGED: age group 65 and above,</li>
+<li>TOTAL: all age groups, and</li>
+<li>DEPENDENCY: the ratio between young and aged against economy active group</li>
+</ul>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb28"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a>popdata2023 <span class="ot">&lt;-</span> popdata2023 <span class="sc">%&gt;%</span></span>
 <span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">YOUNG =</span> <span class="fu">rowSums</span>(.[<span class="dv">3</span><span class="sc">:</span><span class="dv">6</span>]) <span class="sc">+</span> <span class="fu">rowSums</span>(.[<span class="dv">14</span>])) <span class="sc">%&gt;%</span></span>

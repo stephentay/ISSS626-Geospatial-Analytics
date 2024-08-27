@@ -93,6 +93,7 @@ popdata2023 <- popdata %>%
 colnames(popdata2023)
 ```
 Now we can sum and create the respective columns:
+
 - YOUNG: age group 0-4 until age group 20-24,
 - ECONOMY ACTIVE: age group 25-29 until age group 60-64,
 - AGED: age group 65 and above,
