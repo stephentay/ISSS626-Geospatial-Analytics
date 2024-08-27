@@ -13,32 +13,52 @@ execute:
 
 
 # 1. Getting Started
-
 ```{r}
 pacman::p_load(sf, tmap, tidyverse, ggstatsplot)
 ```
 
-# Working with Master Plan Planning Sub-zone Data
-Importing the shapefile.
+# 2. Importing and Writing Geospatial Data
+
+::: panel-tabset
+## Importing shapefile format
+In this example, we are importing the Master Plan Planning Subzone Data 2014.
 ```{r}
 mpsz14_shp <- st_read(dsn = "data/geospatial", 
                   layer = "MP14_SUBZONE_WEB_PL")
 ```
-To write the file to kml, you could use the following code. delete_dsn argument is to overwrite the old file, if any.
+## Writing geospatial data to KML file format
+To write geospatial data to kml file format, you could use `st_write`. When setting `delete_dsn` argument to `TRUE`, it overwrites any existing file in the folder. If the argument is set to `FALSE`, it will yield an error if there is already an existing file in the folder.
 ```{r}
 st_write(mpsz14_shp, "data/geospatial/MP_SUBZONE_WEB_PL.kml", delete_dsn = TRUE)
 ```
+:::
 
+# 3. Working with Master Plan Planning Subzone Data 2019 
+## 3.1 Importing dataset
+In this section, we will import the Master Plan Planning Subzone Data 2019 (MPSZ19) both in kml and shapefile format.
+As part of EDA, we should compare the two files to understand the data and identify any issues with the data before proceeding further.
 
+::: panel-tabset
+## MPSZ19 KML file format
+We see that this dataset is not ideal for analysis as it only provides the simple feature geometry, but does not provide any useful details of each simple feature.
 ```{r}
 mpsz19_kml <- st_read("data/geospatial/MasterPlan2019SubzoneBoundaryNoSeaKML.kml")
+head(mpsz19_kml)
 ```
 
+## MPSZ19 shapefile format
+Unlike the kml file, the shapefile dataset provides the simple feature geometry, as well as the details of each simple feature.
 ```{r}
 mpsz19_shp <- st_read(dsn = "data/geospatial", 
                   layer = "MPSZ-2019")
+head(mpsz14_shp)
 ```
-mpsz19 CRS is in WGS 84. So we need to convert it. It is a Geographical Coordinate System, useful in GPS to pinpoint a specific location, and the unit of measurement is in decimal degree. But it is not suitable for geospatial analysis as the distance measurement is distorted, depending on the location you are in. 
+:::
+
+## 3.2 Projection Transformation
+The CRS of `mpsz19` is in **WGS 84**, which is a Geographical Coordinate System, useful in GPS to pinpoint a specific location, and the unit of measurement is in decimal degree. However, it is not suitable for geospatial analysis as the distance measurement of decimal degree is distorted. We will need to transform it from geographic coordinate system to projected coordinate system. 
+
+In this code, we could build a pipe to import the data and transform it to projected coordinate system.
 
 ```{r}
 mpsz19_shp <- st_read(dsn = "data/geospatial", 
@@ -46,20 +66,48 @@ mpsz19_shp <- st_read(dsn = "data/geospatial",
   st_transform(crs = 3414)
 ```
 
-
+# 4. Working with Aspatial Population Data
+We will be importing and transforming the Population data of Singapore Residents by Planning Area / Subzone, Age Group, Sex and Type of Dwelling, June 2023. 
 ```{r}
 popdata <- read_csv("data/aspatial/respopagesextod2023.csv")
+head(popdata)
 ```
 
-
+We will need to aggregate the population data by the subzone and age group.
 ```{r}
 popdata2023 <- popdata %>%
   group_by(PA, SZ, AG) %>%
   summarise(`POP` = sum(Pop)) %>%
   ungroup()
-popdata2023 %>%
+colnames(popdata2023)
+```
+
+We use `pivot_wider` to "spread out" the age groups to become a wide table.
+```{r}
+popdata2023 <- popdata %>%
+  group_by(PA, SZ, AG) %>%
+  summarise(`POP` = sum(Pop)) %>%
+  ungroup() %>%
   pivot_wider(names_from = AG,
               values_from = POP)
+colnames(popdata2023)
+```
+Now we can sum and create the respective columns:
+- YOUNG: age group 0-4 until age group 20-24,
+- ECONOMY ACTIVE: age group 25-29 until age group 60-64,
+- AGED: age group 65 and above,
+- TOTAL: all age groups, and
+- DEPENDENCY: the ratio between young and aged against economy active group
+
+```{r}
+popdata2023 <- popdata2023 %>%
+  mutate(YOUNG = rowSums(.[3:6]) + rowSums(.[14])) %>%
+  mutate(`ECONOMY ACTIVE` = rowSums(.[7:13]) + rowSums(.[15])) %>%
+  mutate(`AGED` = rowSums(.[16:21])) %>%
+  mutate(`TOTAL` = rowSums(.[3:21])) %>%
+  mutate(`DEPENDENCY` = (`YOUNG` + `AGED`) / `ECONOMY ACTIVE`) %>%
+  select(`PA`, `SZ`, `YOUNG`, `ECONOMY ACTIVE`, `AGED`, `TOTAL`, `DEPENDENCY`)
+popdata2023
 ```
 
 
