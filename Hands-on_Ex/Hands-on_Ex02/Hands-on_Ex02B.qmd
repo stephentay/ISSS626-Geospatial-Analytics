@@ -294,7 +294,7 @@ Alpha is set at 0.001, with 999 Monte-carlo simulations.
 set.seed(2024)
 G_tm.csr <- envelope(childcare_tm_ppp, Gest, correction = "best", nsim = 999, nrank = 1)
 ```
-The G-function is near the upper boundary of the simulation envelope. We would need to zoom in to be able to tell whether the G-function has crossed the boundary. If it's within the boundary, then the childcare locations in Tampines exhibit a random pattern. If it exceeds the upper boundary, then it could suggest a clustered pattern.
+The G-function is near the upper boundary of the simulation envelope. When we zoom in, we could see that the G-function has crossed the upper boundary for a certain range of distance, suggesting a clustered pattern.
 ```{r}
 plot(G_tm.csr)
 ```
@@ -515,6 +515,7 @@ When we zoom into the chart, the J-function is below 1, implying clustering of c
 ```{r}
 plot(J_tm.csr)
 ```
+:::
 
 # 10. Summary
 The second-order spatial point pattern analysis using various functions indicates that the childcare centers in Choa Chu Kang (CCK) are randomly distributed, while those in Tampines exhibit a clustered pattern.
