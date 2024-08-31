@@ -13,28 +13,53 @@ execute:
 
 
 # 1. Overview
+This exercise focuses on **second-order properties** of spatial point patterns. Second-order properties examine the interactions between points, analyzing how these interactions influence the overall pattern. An example of a second-order property is the degree of dispersion — whether a point pattern is clustered, dispersed, or random. In general, distance-based methods, which consider the distances between pairs of points, are used to measure second-order properties.
+
+As in the previous hands-on exercise on first-order spatial point pattern analysis, we will use the same geospatial R packages.
 
 ```{r}
 pacman::p_load(sf, spatstat, raster, maptools, tmap, tidyverse)
 ```
 
-5.4.1
+# 2. Importing & Transforming Data
+
+As in the previous hands-on exercise, we will be importing the same three datasets:
+
+-   Locations of childcare centers from data.gov.sg
+-   Master Plan 2014 Subzone Boundary (Web) from data.gov.sg
+-   National Coastal Boundary of Singapore from Singapore Land Authority (SLA)
+
+Since the original datasets were in geographic coordinate system or had incorrect projection system, we will need to transform them to the same projection system.
+
+::: panel-tabset
+## Childcare Centers
+
 ```{r}
 childcare_sf <- st_read("data/geospatial/child-care-services-geojson.geojson") %>%
   st_transform(crs = 3414)
 ```
+
+## Master Plan Subzone
 
 ```{r}
 sg_sf <- st_read(dsn = "data/geospatial", layer="CostalOutline") %>%
   st_set_crs(3414)
 ```
 
+## Coastal Boundary
 
 ```{r}
 mpsz_sf <- st_read(dsn = "data/geospatial", layer = "MP14_SUBZONE_WEB_PL") %>%
   st_set_crs(3414)
 ```
+:::
 
+# 3. GeoVisualisation of Childcare Centers
+
+It's important to take a look at the spatial patterns of the childcare centers.
+
+::: panel-tabset
+## Static map
 
 ```{r}
 tm_shape(sg_sf) +
@@ -44,6 +69,9 @@ tm_shape(sg_sf) +
   tm_shape(childcare_sf) +
   tm_dots(size = 0.01, alpha = 0.5)
 ```
+## Interactive pin map
+
+An interactive pin map allows for free navigation and zooming across the map. You can easily query information about each point by clicking on it. Additionally, you have the option to change the background layer of the map.
 
 ```{r}
 tmap_mode('view')
@@ -54,13 +82,18 @@ tm_shape(childcare_sf)+
 ```{r}
 tmap_mode('plot')
 ```
+:::
 
-5.5.1
+# 4. Geospatial Data Wrangling
+
+## 4.1. Convert into spatstat's `ppp` format
+
+Here, we convert the childcare dataset into `ppp` format. We will also plot it and show the summary statistics of the created `ppp` object.
+
 ```{r}
 childcare_ppp <- as.ppp(childcare_sf)
 childcare_ppp
 ```
-
 
 ```{r}
 plot(childcare_ppp)
@@ -69,14 +102,21 @@ plot(childcare_ppp)
 ```{r}
 summary(childcare_ppp)
 ```
+## 4.2 Checking and handling duplicated points
 
+::: panel-tabset
+### Check for any duplicated points
 ```{r}
 any(duplicated(childcare_ppp))
 ```
 
+### Count the number of duplicated points
+
 ```{r}
 sum(multiplicity(childcare_ppp) > 1)
 ```
+
+### View locations of duplicated points
 
 ```{r}
 tmap_mode('view')
@@ -90,6 +130,10 @@ tm_shape(childcare_sf) +
 tmap_mode('plot')
 ```
 
+### Jittering approach
+
+The simplest way to handle duplicated points is to delete them, but this approach may result in the loss of valuable data. Alternatively, you can use jittering, which applies a small perturbation to the duplicate points, ensuring they do not occupy the exact same location.
+
 ```{r}
 childcare_ppp_jit <- rjitter(childcare_ppp, 
                              retry=TRUE, 
@@ -100,8 +144,11 @@ childcare_ppp_jit <- rjitter(childcare_ppp,
 ```{r}
 any(duplicated(childcare_ppp_jit))
 ```
+:::
 
-5.5.3
+## 4.3 Create `owin` object
+
+When analyzing spatial point patterns, it is good practice to confine the analysis within a geographical boundary. This involves converting a spatial polygon into an `owin` object for use with the `spatstat` package later.
 ```{r}
 sg_owin <- as.owin(sg_sf)
 plot(sg_owin)
@@ -111,7 +158,9 @@ plot(sg_owin)
 summary(sg_owin)
 ```
 
-5.5.4
+## 4.4 Combine `owin` object with point events
+
+In this final step of geospatial data wrangling, we will **extract childcare events located within Singapore boundary** using the code chunk below. The resulting object combines both point and polygon features into a single `ppp` object.
 ```{r}
 childcareSG_ppp = childcare_ppp[sg_owin]
 summary(childcareSG_ppp)
@@ -121,7 +170,12 @@ summary(childcareSG_ppp)
 plot(childcareSG_ppp)
 ```
 
-5.5.4.1
+## 4.5 Extracting Area of Study
+
+We will study the following areas: Punggol, Tampines, Choa Chu Kang and Jurong West planning areas.
+
+::: panel-tabset
+### 1. Extracting area of study
 ```{r}
 pg <- mpsz_sf %>%
   filter(PLN_AREA_N == "PUNGGOL")
@@ -133,37 +187,47 @@ jw <- mpsz_sf %>%
   filter(PLN_AREA_N == "JURONG WEST")
 ```
 
+### 2A. Plotting Punggol
+
 ```{r}
-par(mfrow=c(2,2))
-plot(pg, main = "Ponggol")
+plot(pg, main = "Punggol")
 ```
+### 2B. Plotting Tampines
 
 ```{r}
 plot(tm, main = "Tampines")
 ```
 
+### 2C. Plotting Choa Chu Kang
 
 ```{r}
 plot(ck, main = "Choa Chu Kang")
 ```
 
+### 2D. Plotting Jurong West
+
 ```{r}
 plot(jw, main = "Jurong West")
 ```
-5.5.4.2
+
+### 3. Creating `owin` object for each area
 ```{r}
 pg_owin = as.owin(pg)
 tm_owin = as.owin(tm)
 ck_owin = as.owin(ck)
 jw_owin = as.owin(jw)
 ```
-5.5.4.3
+
+### 4. Extracting childcare points for each area
+
 ```{r}
 childcare_pg_ppp = childcare_ppp_jit[pg_owin]
 childcare_tm_ppp = childcare_ppp_jit[tm_owin]
 childcare_ck_ppp = childcare_ppp_jit[ck_owin]
 childcare_jw_ppp = childcare_ppp_jit[jw_owin]
 ```
+
+### 5. Rescaling unit of measurement
 
 ```{r}
 childcare_pg_ppp.km = rescale(childcare_pg_ppp, 1000, "km")
@@ -172,6 +236,7 @@ childcare_ck_ppp.km = rescale(childcare_ck_ppp, 1000, "km")
 childcare_jw_ppp.km = rescale(childcare_jw_ppp, 1000, "km")
 ```
 
+### 6. Plotting childcare locations
 
 ```{r}
 par(mfrow=c(2,2))
@@ -180,87 +245,141 @@ plot(childcare_tm_ppp.km, main="Tampines")
 plot(childcare_ck_ppp.km, main="Choa Chu Kang")
 plot(childcare_jw_ppp.km, main="Jurong West")
 ```
+:::
 
-5.7.1
+# 5. Analysing Spatial Point Process Using G-Function
+The **G-function** focuses on the distances between each event and its nearest neighboring event in a point pattern. It represents the cumulative distribution of these nearest neighbor distances. In practice, you calculate the distance from each event to its closest neighboring event and then analyze the cumulative distribution of these distances to understand the spatial relationship between the points.
+
+::: panel-tabset
+## G-Function for CCK
+The chart below is the **G-function** of the childcare locations in CCK with reference curve for CSR, which is the homogeneous Poisson point process. The G-function here has taken a certain edge correction procedure, which is out-of-scope for discussion.
 ```{r}
 G_CK = Gest(childcare_ck_ppp, correction = "border")
 plot(G_CK, xlim=c(0,500))
 ```
 
-5.7.1.2
+## G-Function CSR Test for CCK
+The test hypotheses are as follows:
+
+-   H0: The distribution of childcare services in Choa Chu Kang are randomly distributed.
+-   H1: The distribution of childcare services in Choa Chu Kang are not randomly distributed.
+
+Alpha is set at 0.001, with 999 Monte-carlo simulations.
+
 ```{r}
 set.seed(2024)
-G_CK.csr <- envelope(childcare_ck_ppp, Gest, nsim = 999)
+G_CK.csr <- envelope(childcare_ck_ppp, Gest, correction = "border", nsim = 999, nrank = 1)
 ```
 
+Since the G-function is within the boundary of the simulation envelope, the childcare locations in CCK exhibit a random pattern.
 ```{r}
 plot(G_CK.csr)
 ```
 
-5.7.2
+## G-Function for Tampines
+The chart below is the **G-function** of the childcare locations in Tampines with reference curve for CSR, which is the homogeneous Poisson point process. The G-function here has taken a certain edge correction procedure, which is out-of-scope for discussion.
 ```{r}
 G_tm = Gest(childcare_tm_ppp, correction = "best")
 plot(G_tm)
 ```
 
+## G-Function CSR Test for Tampines
+The test hypotheses are as follows:
 
+-   H0: The distribution of childcare services in Tampines are randomly distributed.
+-   H1: The distribution of childcare services in Tampines are not randomly distributed.
+
+Alpha is set at 0.001, with 999 Monte-carlo simulations.
 ```{r}
 set.seed(2024)
-G_tm.csr <- envelope(childcare_tm_ppp, Gest, correction = "all", nsim = 999)
+G_tm.csr <- envelope(childcare_tm_ppp, Gest, correction = "best", nsim = 999, nrank = 1)
 ```
-
+The G-function is near the upper boundary of the simulation envelope. We would need to zoom in to be able to tell whether the G-function has crossed the boundary. If it's within the boundary, then the childcare locations in Tampines exhibit a random pattern. If it exceeds the upper boundary, then it could suggest a clustered pattern.
 ```{r}
 plot(G_tm.csr)
 ```
+:::
 
-5.8.1
+# 6. Analysing Spatial Point Process Using F-Function
+The **F-function**, also known as the empty space function, summarizes the characteristics of the nearest neighbor distances from a set of reference points to the nearest event in the point pattern. For each reference point, we calculate the distance to the closest event (a point in the pattern). Then, we take all these distances and construct a cumulative distribution, similar to how we do it for the G-function.
+
+::: panel-tabset
+## F-Function for CCK
+The chart below is the **F-function** of the childcare locations in CCK with reference curve for CSR. The chart shows some edge correction procedures, which is out-of-scope for discussion.
 ```{r}
 F_CK = Fest(childcare_ck_ppp)
 plot(F_CK)
 ```
+## F-Function CSR Test for CCK
+The test hypotheses are as follows:
+
+-   H0: The distribution of childcare services in Choa Chu Kang are randomly distributed.
+-   H1: The distribution of childcare services in Choa Chu Kang are not randomly distributed.
+
+Alpha is set at 0.001, with 999 Monte-carlo simulations.
 
 ```{r}
 set.seed(2024)
-F_CK.csr <- envelope(childcare_ck_ppp, Fest, nsim = 999)
+F_CK.csr <- envelope(childcare_ck_ppp, Fest, nsim = 999, nrank = 1)
 ```
-
+Since the F-function is within the boundary of the simulation envelope, the childcare locations in CCK exhibit a random pattern.
 ```{r}
 plot(F_CK.csr)
 ```
 
-5.8.3
+## F-Function for Tampines
+The chart below is the **F-function** of the childcare locations in Tampines with reference curve for CSR. The F-function here has taken a certain edge correction procedure, which is out-of-scope for discussion.
 ```{r}
 F_tm = Fest(childcare_tm_ppp, correction = "best")
 plot(F_tm)
 ```
+## F-Function CSR Test for Tampines
+The test hypotheses are as follows:
 
+-   H0: The distribution of childcare services in Tampines are randomly distributed.
+-   H1: The distribution of childcare services in Tampines are not randomly distributed.
+
+Alpha is set at 0.001, with 999 Monte-carlo simulations.
 ```{r}
 set.seed(2024)
-F_tm.csr <- envelope(childcare_tm_ppp, Fest, correction = "all", nsim = 999)
+F_tm.csr <- envelope(childcare_tm_ppp, Fest, correction = "best", nsim = 999, nrank = 1)
 ```
-
+Since the F-function is below the lower boundary of the envelope, it implies clustering of childcare locations in Tampines.
 ```{r}
 plot(F_tm.csr)
 ```
+:::
 
-5.9.1
+# 7. Analysing Spatial Point Process Using K-Function
+The **K-function** measures the expected number of events within a certain distance from an arbitrary event in a point pattern. To understand it, imagine drawing a circle of a given radius around each event and counting how many other points fall within those circles. The K-function calculates this expected number of points and compares it to what would be expected under complete spatial randomness. Specifically, the K-function is the observed number of points within a given distance, normalized by the intensity (average number of points per unit area), and then compared to the expected value under randomness. This helps to identify whether the point pattern is clustered, dispersed, or random at different scales.
+
+::: panel-tabset
+## K-Function for CCK
+The chart below is the **K-function** of the childcare locations in CCK with reference curve for CSR.
 ```{r}
 K_ck = Kest(childcare_ck_ppp, correction = "Ripley")
 plot(K_ck, . -r ~ r, ylab= "K(d)-r", xlab = "d(m)")
 ```
 
-5.9.1.2
+## K-Function CSR Test for CCK
+The test hypotheses are as follows:
+
+-   H0: The distribution of childcare services in Choa Chu Kang are randomly distributed.
+-   H1: The distribution of childcare services in Choa Chu Kang are not randomly distributed.
+
+Alpha is set at 0.001, with 999 Monte-carlo simulations.
 ```{r}
 set.seed(2024)
-K_ck.csr <- envelope(childcare_ck_ppp, Kest, nsim = 99, rank = 1, glocal=TRUE)
+K_ck.csr <- envelope(childcare_ck_ppp, Kest, nsim = 999, rank = 1, glocal=TRUE)
 ```
 
-
+Since the K-function is within the boundary of the simulation envelope, the childcare locations in CCK exhibit a random pattern.
 ```{r}
 plot(K_ck.csr, . - r ~ r, xlab="d", ylab="K(d)-r")
 ```
 
-5.9.2
+## K-Function for Tampines
+The chart below is the **K-function** of the childcare locations in Tampines with reference curve for CSR.
 ```{r}
 K_tm = Kest(childcare_tm_ppp, correction = "Ripley")
 plot(K_tm, . -r ~ r, 
@@ -268,34 +387,56 @@ plot(K_tm, . -r ~ r,
      xlim=c(0,1000))
 ```
 
+## K-Function CSR Test for Tampines
+The test hypotheses are as follows:
+
+-   H0: The distribution of childcare services in Tampines are randomly distributed.
+-   H1: The distribution of childcare services in Tampines are not randomly distributed.
+
+Alpha is set at 0.001, with 999 Monte-carlo simulations.
+
 ```{r}
 set.seed(2024)
-K_tm.csr <- envelope(childcare_tm_ppp, Kest, nsim = 99, rank = 1, glocal=TRUE)
+K_tm.csr <- envelope(childcare_tm_ppp, Kest, nsim = 999, rank = 1, glocal=TRUE)
 ```
 
+Since the K-function is clearly above the randomisation envelope, it strongly suggests significant clustering of childcare centers in Tampines.
 ```{r}
 plot(K_tm.csr, . - r ~ r, 
      xlab="d", ylab="K(d)-r", xlim=c(0,500))
 ```
+:::
 
-5.10.1
+# 8. Analysing Spatial Point Process Using L-Function
+The **L-function** is a transformation of the K-function that adjusts for the increasing variance as distance increases. As the distance grows, the circles used in the K-function become larger, leading to more variability in the number of points within them. The L-function stabilizes this variance
+
+::: panel-tabset
+## L-Function for CCK
+The chart below is the **L-function** of the childcare locations in CCK with reference line for CSR.
 ```{r}
 L_ck = Lest(childcare_ck_ppp, correction = "Ripley")
 plot(L_ck, . -r ~ r, 
      ylab= "L(d)-r", xlab = "d(m)")
 ```
 
+## L-Function CSR Test for CCK
+The test hypotheses are as follows:
 
+-   H0: The distribution of childcare services in Choa Chu Kang are randomly distributed.
+-   H1: The distribution of childcare services in Choa Chu Kang are not randomly distributed.
+
+Alpha is set at 0.001, with 999 Monte-carlo simulations.
 ```{r}
 set.seed(2024)
 L_ck.csr <- envelope(childcare_ck_ppp, Lest, nsim = 99, rank = 1, glocal=TRUE)
 ```
-
+Since the L-function is within the boundary of the simulation envelope, the childcare locations in CCK exhibit a random pattern.
 ```{r}
 plot(L_ck.csr, . - r ~ r, xlab="d", ylab="L(d)-r")
 ```
 
-5.10.2
+## L-Function for Tampines
+The chart below is the **L-function** of the childcare locations in Tampines with reference line for CSR.
 ```{r}
 L_tm = Lest(childcare_tm_ppp, correction = "Ripley")
 plot(L_tm, . -r ~ r, 
@@ -303,44 +444,77 @@ plot(L_tm, . -r ~ r,
      xlim=c(0,1000))
 ```
 
+## L-Function CSR Test for Tampines
+The test hypotheses are as follows:
+
+-   H0: The distribution of childcare services in Tampines are randomly distributed.
+-   H1: The distribution of childcare services in Tampines are not randomly distributed.
+
+Alpha is set at 0.001, with 999 Monte-carlo simulations.
+
 ```{r}
 set.seed(2024)
-L_tm.csr <- envelope(childcare_tm_ppp, Lest, nsim = 99, rank = 1, glocal=TRUE)
+L_tm.csr <- envelope(childcare_tm_ppp, Lest, nsim = 999, rank = 1, glocal=TRUE)
 ```
+Since the L-function is clearly above the randomisation envelope, it strongly suggests significant clustering of childcare centers in Tampines.
 
 ```{r}
 plot(L_tm.csr, . - r ~ r, 
      xlab="d", ylab="L(d)-r", xlim=c(0,500))
 ```
+:::
 
-5.11
+# 9. Analysing Spatial Point Process Using J-Function
+The **J-function** combines information from the F-function and the G-function, to compare the observed point pattern against CSR. 
+
+::: panel-tabset
+## J-Function for CCK
+The chart below is the **J-function** of the childcare locations in CCK with reference line for CSR.
+
 ```{r}
 J_CK = Jest(childcare_ck_ppp)
 plot(J_CK)
 ```
+## J-Function CSR Test for CCK
+The test hypotheses are as follows:
 
+-   H0: The distribution of childcare services in Choa Chu Kang are randomly distributed.
+-   H1: The distribution of childcare services in Choa Chu Kang are not randomly distributed.
+
+Alpha is set at 0.001, with 999 Monte-carlo simulations.
 ```{r}
 set.seed(2024)
-J_CK.csr <- envelope(childcare_ck_ppp, Jest, nsim = 999)
+J_CK.csr <- envelope(childcare_ck_ppp, Jest, nsim = 999, nrank=1)
 ```
 
+Since the J-function is near one and within the envelope, the childcare locations in CCK exhibit a random pattern.
 ```{r}
 plot(J_CK.csr)
 ```
+## J-Function for Tampines
+The chart below is the **J-function** of the childcare locations in Tampines with reference line for CSR.
 
 ```{r}
 J_tm = Jest(childcare_tm_ppp, correction = "best")
 plot(J_tm)
 ```
+## J-Function CSR Test for Tampines
+The test hypotheses are as follows:
+
+-   H0: The distribution of childcare services in Tampines are randomly distributed.
+-   H1: The distribution of childcare services in Tampines are not randomly distributed.
+
+Alpha is set at 0.001, with 999 Monte-carlo simulations.
 
 ```{r}
 set.seed(2024)
-J_tm.csr <- envelope(childcare_tm_ppp, Jest, correction = "all", nsim = 999)
+J_tm.csr <- envelope(childcare_tm_ppp, Jest, correction = "best", nsim = 999, nrank=1)
 ```
 
-
+When we zoom into the chart, the J-function is below 1, implying clustering of childcare locations in Tampines.
 ```{r}
 plot(J_tm.csr)
 ```
 
-
+# 10. Summary
+The second-order spatial point pattern analysis using various functions indicates that the childcare centers in Choa Chu Kang (CCK) are randomly distributed, while those in Tampines exhibit a clustered pattern.
