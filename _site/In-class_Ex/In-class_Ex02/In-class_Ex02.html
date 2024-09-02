@@ -194,7 +194,16 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#loading-thailands-road-traffic-accident-data" id="toc-loading-thailands-road-traffic-accident-data" class="nav-link active" data-scroll-target="#loading-thailands-road-traffic-accident-data">Loading Thailand’s Road Traffic Accident data</a></li>
+  <li><a href="#overview" id="toc-overview" class="nav-link active" data-scroll-target="#overview">Overview</a></li>
+  <li><a href="#missing-longitude-and-latitude-data" id="toc-missing-longitude-and-latitude-data" class="nav-link" data-scroll-target="#missing-longitude-and-latitude-data">1. Missing Longitude and Latitude Data</a></li>
+  <li><a href="#converting-kde-outputs-to-gridded-kernal-density-objects" id="toc-converting-kde-outputs-to-gridded-kernal-density-objects" class="nav-link" data-scroll-target="#converting-kde-outputs-to-gridded-kernal-density-objects">2. Converting KDE Outputs to Gridded Kernal Density Objects</a>
+  <ul class="collapse">
+  <li><a href="#retired-maptools" id="toc-retired-maptools" class="nav-link" data-scroll-target="#retired-maptools">2.1 Retired <code>maptools</code></a></li>
+  <li><a href="#spatstat.geom-alternative-to-as.spatialgriddataframe.im" id="toc-spatstat.geom-alternative-to-as.spatialgriddataframe.im" class="nav-link" data-scroll-target="#spatstat.geom-alternative-to-as.spatialgriddataframe.im">2.2 <code>spatstat.geom</code> alternative to <code>as.SpatialGridDataFrame.im()</code></a></li>
+  </ul></li>
+  <li><a href="#dissolving-boundaries" id="toc-dissolving-boundaries" class="nav-link" data-scroll-target="#dissolving-boundaries">3. Dissolving Boundaries</a></li>
+  <li><a href="#ensuring-reproducibility-when-using-monte-carlo-simulation" id="toc-ensuring-reproducibility-when-using-monte-carlo-simulation" class="nav-link" data-scroll-target="#ensuring-reproducibility-when-using-monte-carlo-simulation">4. Ensuring Reproducibility when Using Monte Carlo Simulation</a></li>
+  <li><a href="#jittering-approach-for-points-at-the-same-location" id="toc-jittering-approach-for-points-at-the-same-location" class="nav-link" data-scroll-target="#jittering-approach-for-points-at-the-same-location">5. Jittering Approach for Points at the Same Location</a></li>
   </ul>
 </nav>
     </div>
@@ -227,7 +236,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <div>
     <div class="quarto-title-meta-heading">Modified</div>
     <div class="quarto-title-meta-contents">
-      <p class="date-modified">September 2, 2024</p>
+      <p class="date-modified">September 3, 2024</p>
     </div>
   </div>
     
@@ -236,11 +245,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 </header>
 
+<section id="overview" class="level1">
+<h1>Overview</h1>
+<p>In this in-class exercise, we will address common challenges encountered when working with geospatial data or using R’s geospatial packages.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>pacman<span class="sc">::</span><span class="fu">p_load</span>(sf, spatstat, raster, maptools, tmap, tidyverse)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
-<section id="loading-thailands-road-traffic-accident-data" class="level1">
-<h1>Loading Thailand’s Road Traffic Accident data</h1>
+</section>
+<section id="missing-longitude-and-latitude-data" class="level1">
+<h1>1. Missing Longitude and Latitude Data</h1>
+<p>The Thailand Road Traffic Accident dataset includes the longitude and latitude locations of accidents. Before converting this data to an sf object, it’s essential to ensure that there are no missing or unexpected values (e.g., “NA”) in the longitude and latitude columns. Failing to address these can cause errors during conversion.</p>
+<p>Additionally, it’s important to check that missing data does not exceed 5% of the total dataset, as this could compromise the dataset’s usability.</p>
+<p>The code below filters out missing or “NA” values in the longitude and latitude columns.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>rdacc_sf <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"data/aspatial/thai_road_accident_2019_2022.csv"</span>) <span class="sc">%&gt;%</span></span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(longitude) <span class="sc">&amp;</span> longitude <span class="sc">!=</span> <span class="st">""</span>,</span>
@@ -261,6 +277,7 @@ dttm  (2): incident_datetime, report_datetime
 ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.</code></pre>
 </div>
 </div>
+<p>Now that we have removed all missing or “NA” values in the longitude and latitude columns, the point geometry has been successfully created.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">glimpse</span>(rdacc_sf)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
@@ -284,6 +301,87 @@ $ road_description            &lt;chr&gt; "straight road", "straight road", "wid
 $ slope_description           &lt;chr&gt; "no slope", "no slope", "slope area", "no …
 $ geometry                    &lt;POINT [m]&gt; POINT (701480.8 1654653), POINT (113…</code></pre>
 </div>
+</div>
+</section>
+<section id="converting-kde-outputs-to-gridded-kernal-density-objects" class="level1">
+<h1>2. Converting KDE Outputs to Gridded Kernal Density Objects</h1>
+<section id="retired-maptools" class="level2">
+<h2 class="anchored" data-anchor-id="retired-maptools">2.1 Retired <code>maptools</code></h2>
+<p>The <code>as.SpatialGridDataFrame.im()</code> function from the <code>maptools</code> package is used to convert KDE outputs into gridded kernel density objects. However, <code>maptools</code> has been retired, and its binary has been removed from CRAN, making it unavailable for installation through conventional methods. You can still download it from <strong>Posit Public Package Manager</strong> snapshots using the code chunk below.</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">install.packages</span>(<span class="st">"maptools"</span>, <span class="at">repos =</span> <span class="st">"https://packagemanager.posit.co/cran/2023-10-13"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>Here’s the gridded kernel density object using the <code>as.SpatialGridDataFrame.im()</code> function from the <code>maptools</code> package</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>gridded_kde_childcareSG_bw <span class="ot">&lt;-</span> maptools<span class="sc">::</span><span class="fu">as.SpatialGridDataFrame.im</span>(kde_childcareSG.bw)</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="fu">spplot</span>(gridded_kde_childcareSG_bw)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="In-class_Ex02_files/figure-html/unnamed-chunk-6-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+</section>
+<section id="spatstat.geom-alternative-to-as.spatialgriddataframe.im" class="level2">
+<h2 class="anchored" data-anchor-id="spatstat.geom-alternative-to-as.spatialgriddataframe.im">2.2 <code>spatstat.geom</code> alternative to <code>as.SpatialGridDataFrame.im()</code></h2>
+<p>If you prefer not to use the retired <code>maptools</code> package, you can use <code>spatstat.geom</code> as an alternative to convert KDE outputs into gridded kernel density objects. The output will be the same.</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>gridded_kde_childcareSG_bw_spatstat <span class="ot">&lt;-</span> <span class="fu">as</span>(kde_childcareSG.bw, <span class="st">"SpatialGridDataFrame"</span>)</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="fu">spplot</span>(gridded_kde_childcareSG_bw_spatstat)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="In-class_Ex02_files/figure-html/unnamed-chunk-7-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+</section>
+</section>
+<section id="dissolving-boundaries" class="level1">
+<h1>3. Dissolving Boundaries</h1>
+<p><code>sf</code> also supports GIS functions. For example, you have the Singapore map at the planning subzone level, but you want to dissolve all internal boundaries to a single outline map of Singapore. You could do so using <code>st_union()</code>.</p>
+<div class="tabset-margin-container"></div><div class="panel-tabset">
+<ul class="nav nav-tabs" role="tablist"><li class="nav-item" role="presentation"><a class="nav-link active" id="tabset-1-1-tab" data-bs-toggle="tab" data-bs-target="#tabset-1-1" role="tab" aria-controls="tabset-1-1" aria-selected="true">Before dissolving</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-1-2-tab" data-bs-toggle="tab" data-bs-target="#tabset-1-2" role="tab" aria-controls="tabset-1-2" aria-selected="false">After dissolving using <code>st_union()</code></a></li></ul>
+<div class="tab-content">
+<div id="tabset-1-1" class="tab-pane active" role="tabpanel" aria-labelledby="tabset-1-1-tab">
+<p>I have two maps here: one being the planning subzone, the other the coastal outline.</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(mpsz_sf<span class="sc">$</span>geometry)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="In-class_Ex02_files/figure-html/unnamed-chunk-8-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(sg_sf<span class="sc">$</span>geometry)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="In-class_Ex02_files/figure-html/unnamed-chunk-9-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+</div>
+<div id="tabset-1-2" class="tab-pane" role="tabpanel" aria-labelledby="tabset-1-2-tab">
+<p>As you can see, all administrative boundaries disappear when we use <code>st_union</code> to combine the maps.</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>sg_sf <span class="ot">&lt;-</span> mpsz_sf <span class="sc">%&gt;%</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">st_union</span>()</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(sg_sf)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="In-class_Ex02_files/figure-html/unnamed-chunk-10-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section id="ensuring-reproducibility-when-using-monte-carlo-simulation" class="level1">
+<h1>4. Ensuring Reproducibility when Using Monte Carlo Simulation</h1>
+<p>Monte Carlo simulation is often used in geospatial analysis (e.g.&nbsp;generating the CSR envelop for G-, F-, K- and L- functions in point pattern analysis). To ensure reproducibility of results, it is important to set seed before using any functions involving Monte Carlo simulations.</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">2024</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="jittering-approach-for-points-at-the-same-location" class="level1">
+<h1>5. Jittering Approach for Points at the Same Location</h1>
+<p>When multiple points share the same location (e.g., childcare centers within the same shopping center), you need to apply jittering before analysis. Ensure that the <code>nsim</code> argument in <code>rjitter()</code> is set to a value greater than 1, such as 50.</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>childcare_ppp_jit <span class="ot">&lt;-</span> <span class="fu">rjitter</span>(childcare_ppp, </span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>                             <span class="at">retry=</span><span class="cn">TRUE</span>, </span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>                             <span class="at">nsim=</span><span class="dv">50</span>, </span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>                             <span class="at">drop=</span><span class="cn">TRUE</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 
 

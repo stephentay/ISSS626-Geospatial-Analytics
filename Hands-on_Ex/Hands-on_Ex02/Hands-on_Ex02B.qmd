@@ -42,14 +42,14 @@ childcare_sf <- st_read("data/geospatial/child-care-services-geojson.geojson") %
 ## Master Plan Subzone
 
 ```{r}
-sg_sf <- st_read(dsn = "data/geospatial", layer="CostalOutline") %>%
+mpsz_sf <- st_read(dsn = "data/geospatial", layer = "MP14_SUBZONE_WEB_PL") %>%
   st_set_crs(3414)
 ```
 
 ## Coastal Boundary
 
 ```{r}
-mpsz_sf <- st_read(dsn = "data/geospatial", layer = "MP14_SUBZONE_WEB_PL") %>%
+sg_sf <- st_read(dsn = "data/geospatial", layer="CostalOutline") %>%
   st_set_crs(3414)
 ```
 :::

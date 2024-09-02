@@ -11,11 +11,22 @@ execute:
   freeze: true 
 ---
 
+# Overview
+
+In this in-class exercise, we will address common challenges encountered when working with geospatial data or using R's geospatial packages.
+
 ```{r}
 pacman::p_load(sf, spatstat, raster, maptools, tmap, tidyverse)
 ```
 
-# Loading Thailand's Road Traffic Accident data
+# 1. Missing Longitude and Latitude Data
+
+The Thailand Road Traffic Accident dataset includes the longitude and latitude locations of accidents. Before converting this data to an sf object, it’s essential to ensure that there are no missing or unexpected values (e.g., “NA”) in the longitude and latitude columns. Failing to address these can cause errors during conversion.
+
+Additionally, it’s important to check that missing data does not exceed 5% of the total dataset, as this could compromise the dataset’s usability.
+
+The code below filters out missing or "NA" values in the longitude and latitude columns.
+
 ```{r}
 rdacc_sf <- read_csv("data/aspatial/thai_road_accident_2019_2022.csv") %>%
   filter(!is.na(longitude) & longitude != "",
@@ -26,6 +37,99 @@ rdacc_sf <- read_csv("data/aspatial/thai_road_accident_2019_2022.csv") %>%
   st_transform(crs = 32647)
 ```
 
+Now that we have removed all missing or "NA" values in the longitude and latitude columns, the point geometry has been successfully created.
+
 ```{r}
 glimpse(rdacc_sf)
+```
+
+# 2. Converting KDE Outputs to Gridded Kernal Density Objects
+
+## 2.1 Retired `maptools`
+
+The `as.SpatialGridDataFrame.im()` function from the `maptools` package is used to convert KDE outputs into gridded kernel density objects. However, `maptools` has been retired, and its binary has been removed from CRAN, making it unavailable for installation through conventional methods. You can still download it from **Posit Public Package Manager** snapshots using the code chunk below.
+
+```{r}
+#| eval: false
+install.packages("maptools", repos = "https://packagemanager.posit.co/cran/2023-10-13")
+```
+
+```{r}
+#| echo: false
+#| include: false
+childcare_sf <- st_read("data/geospatial/child-care-services-geojson.geojson") %>%
+  st_transform(crs = 3414)
+mpsz_sf <- st_read(dsn = "data/geospatial", layer = "MP14_SUBZONE_WEB_PL") %>%
+  st_set_crs(3414)
+sg_sf <- st_read(dsn = "data/geospatial", layer="CostalOutline") %>%
+  st_set_crs(3414)
+childcare_ppp <- as.ppp(childcare_sf)
+sg_owin <- as.owin(sg_sf)
+childcareSG_ppp = childcare_ppp[sg_owin]
+childcareSG_ppp.km <- rescale.ppp(childcareSG_ppp, 1000, "km")
+kde_childcareSG.bw <- density(childcareSG_ppp.km, sigma=bw.diggle, kernel="gaussian", edge=TRUE)
+```
+
+Here's the gridded kernel density object using the `as.SpatialGridDataFrame.im()` function from the `maptools` package
+
+```{r}
+gridded_kde_childcareSG_bw <- maptools::as.SpatialGridDataFrame.im(kde_childcareSG.bw)
+spplot(gridded_kde_childcareSG_bw)
+```
+
+## 2.2 `spatstat.geom` alternative to `as.SpatialGridDataFrame.im()`
+
+If you prefer not to use the retired `maptools` package, you can use `spatstat.geom` as an alternative to convert KDE outputs into gridded kernel density objects. The output will be the same.
+
+```{r}
+gridded_kde_childcareSG_bw_spatstat <- as(kde_childcareSG.bw, "SpatialGridDataFrame")
+spplot(gridded_kde_childcareSG_bw_spatstat)
+```
+
+# 3. Dissolving Boundaries
+
+`sf` also supports GIS functions. For example, you have the Singapore map at the planning subzone level, but you want to dissolve all internal boundaries to a single outline map of Singapore. You could do so using `st_union()`.
+
+::: panel-tabset
+## Before dissolving
+
+I have two maps here: one being the planning subzone, the other the coastal outline.
+
+```{r}
+plot(mpsz_sf$geometry)
+```
+
+```{r}
+plot(sg_sf$geometry)
+```
+
+## After dissolving using `st_union()`
+
+As you can see, all administrative boundaries disappear when we use `st_union` to combine the maps.
+
+```{r}
+sg_sf <- mpsz_sf %>%
+  st_union()
+plot(sg_sf)
+```
+:::
+
+# 4. Ensuring Reproducibility when Using Monte Carlo Simulation
+
+Monte Carlo simulation is often used in geospatial analysis (e.g. generating the CSR envelop for G-, F-, K- and L- functions in point pattern analysis). To ensure reproducibility of results, it is important to set seed before using any functions involving Monte Carlo simulations.
+
+```{r}
+set.seed(2024)
+```
+
+# 5. Jittering Approach for Points at the Same Location
+
+When multiple points share the same location (e.g., childcare centers within the same shopping center), you need to apply jittering before analysis. Ensure that the `nsim` argument in `rjitter()` is set to a value greater than 1, such as 50.
+
+```{r}
+#| eval: false
+childcare_ppp_jit <- rjitter(childcare_ppp, 
+                             retry=TRUE, 
+                             nsim=50, 
+                             drop=TRUE)
 ```
