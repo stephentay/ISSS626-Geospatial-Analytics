@@ -7,14 +7,16 @@ website:
     left:
     - text: "Hands-on Exercise"
       menu: 
-        - text: "Hands-on Ex 1A"
+        - text: "1A. Geospatial Data Science with R"
           href: "Hands-on_Ex/Hands-on_Ex01A/Hands-on_Ex01A.html"
-        - text: "Hands-on Ex 1B"
+        - text: "1B. Thematic Mapping and GeoVisualisation"
           href: "Hands-on_Ex/Hands-on_Ex01B/Hands-on_Ex01B.html"
-        - text: "Hands-on Ex 2A"
+        - text: "2A. 1st Order Spatial Point Pattern Analysis Methods"
           href: "Hands-on_Ex/Hands-on_Ex02/Hands-on_Ex02A.html"
-        - text: "Hands-on Ex 2B"
+        - text: "2B. 2nd Order Spatial Point Pattern Analysis Methods"
           href: "Hands-on_Ex/Hands-on_Ex02/Hands-on_Ex02B.html"
+        - text: "3. Network Constrained Spatial Point Pattern Analysis"
+          href: "Hands-on_Ex/Hands-on_Ex03/Hands-on_Ex03.html"
     - text: "In-class Exercise"
       menu: 
         - text: "In-class Ex 1"
