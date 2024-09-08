@@ -107,7 +107,7 @@ Before computing NKDE, the SpatialLines object must be segmented into lixels wit
 ```{r}
 lixels <- lixelize_lines(network, 
                          lx_length = 700, 
-                         mindist = 375)
+                         mindist = 350)
 ```
 
 ## 4.2 Compute lines' center point
@@ -242,6 +242,7 @@ The blue line represents the empirical network G-function of the childcare cente
 ```{r}
 kfun_childcare$plotg
 ```
+:::
 
 # 6. Summary
 
