@@ -292,5 +292,40 @@
     "title": "In-class Ex 2",
     "section": "After dissolving using st_union()",
     "text": "After dissolving using st_union()\nAs you can see, all administrative boundaries disappear when we use st_union to combine the maps.\n\nsg_sf &lt;- mpsz_sf %&gt;%\n  st_union()\nplot(sg_sf)\n\n\n\n\n:::"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex03/Hands-on_Ex03.html",
+    "href": "Hands-on_Ex/Hands-on_Ex03/Hands-on_Ex03.html",
+    "title": "Hands-on Ex 3",
+    "section": "",
+    "text": "Network-constrained spatial point pattern analysis (NetSPAA) focuses on studying events that occur along networks, such as roads and rivers, rather than across open spaces. Unlike traditional spatial analysis, which assumes events can happen anywhere and measures distances in straight lines, this method addresses phenomena restricted to networks, like traffic accidents or store locations. It is especially important for its accurate in detecting event clusters that occur along these networks.\nThe spNetwork package is a crucial geospatial R tool for conducting NetSPAA, specifically for:\n\nNetwork Kernel Density Estimation (NKDE), and\nNetwork-based G-function and K-function analysis.\n\n\npacman::p_load(sf, spNetwork, tmap, tidyverse)"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex03/Hands-on_Ex03.html#prepare-lixels",
+    "href": "Hands-on_Ex/Hands-on_Ex03/Hands-on_Ex03.html#prepare-lixels",
+    "title": "Hands-on Ex 3",
+    "section": "4.1 Prepare lixels",
+    "text": "4.1 Prepare lixels\nBefore computing NKDE, the SpatialLines object must be segmented into lixels with a specified minimum distance. The lixel length (lx_length) is set to 700m, and the minimum length (mindist) is set to 350m. After segmentation, if the final lixel is shorter than the minimum distance, it is merged with the previous lixel.\n\nlixels &lt;- lixelize_lines(network, \n                         lx_length = 700, \n                         mindist = 375)"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex03/Hands-on_Ex03.html#compute-lines-center-point",
+    "href": "Hands-on_Ex/Hands-on_Ex03/Hands-on_Ex03.html#compute-lines-center-point",
+    "title": "Hands-on Ex 3",
+    "section": "4.2 Compute lines’ center point",
+    "text": "4.2 Compute lines’ center point\nNext, lines_center() from the spNetwork package will be used to generate a SpatialPointsDataFrame with points positioned at the center of each line, based on the line’s length, as shown in the code below.\n\nsamples &lt;- lines_center(lixels)"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex03/Hands-on_Ex03.html#perform-nkde",
+    "href": "Hands-on_Ex/Hands-on_Ex03/Hands-on_Ex03.html#perform-nkde",
+    "title": "Hands-on Ex 3",
+    "section": "4.3 Perform NKDE",
+    "text": "4.3 Perform NKDE\nWe are ready to computer the NKDE. There are 3 methods in computing NKDE:\n\n4.3.1 Simple Method4.3.2 Discontinuous Method4.3.3 Continuous Method\n\n\nThe simple method, proposed by Xie and Yan (2008), differs from classical KDE in two key ways:\n\nEvents are snapped to a network.\nDistances between sampling points and events are measured along the network (i.e., not using Euclidean distances).\n\nLet’s examine the NKDE plot using the simple method below!\n\nsimple_densities &lt;- nkde(lines = network, events = childcare,\n                  w = rep(1, nrow(childcare)), samples = samples,\n                  kernel_name = \"quartic\", bw = 300, \n                  div= \"bw\", method = \"simple\", \n                  digits = 1, tol = 1,\n                  grid_shape = c(1,1), max_depth = 8,\n                  agg = 5, sparse = TRUE,\n                  verbose = FALSE)\n\n\nsamples$simple_density &lt;- simple_densities*1000\nlixels$simple_density &lt;- simple_densities*1000\ntmap_mode('view')\n\ntmap mode set to interactive viewing\n\ntm_shape(lixels) +\n  tm_lines(col=\"simple_density\") +\n  tm_shape(childcare) +\n  tm_dots()\n\n\n\n\n\ntmap_mode('plot')\n\ntmap mode set to plotting\n\n\n\n\nThe simple method has a limitation: the event’s mass is multiplied by the number of edges at an intersection, causing the kernel not to integrate to 1. To address this, Okabe and Sugihara (2012) proposed the discontinuous NKDE, which was further extended by Sugihara, Satoh, and Okabe (2010) for networks with cycles shorter than the bandwidth.\nSee the NKDE plot using the discontinuous method below!\n\ndiscontinuous_densities &lt;- nkde(lines = network, events = childcare,\n                  w = rep(1, nrow(childcare)), samples = samples,\n                  kernel_name = \"quartic\", bw = 300, \n                  div= \"bw\", method = \"discontinuous\", \n                  digits = 1, tol = 1,\n                  grid_shape = c(1,1), max_depth = 8,\n                  agg = 5, sparse = TRUE,\n                  verbose = FALSE)\n\n\nsamples$discontinuous_density &lt;- discontinuous_densities*1000\nlixels$discontinuous_density &lt;- discontinuous_densities*1000\ntmap_mode('view')\n\ntmap mode set to interactive viewing\n\ntm_shape(lixels) +\n  tm_lines(col=\"discontinuous_density\") +\n  tm_shape(childcare) +\n  tm_dots()\n\n\n\n\n\ntmap_mode('plot')\n\ntmap mode set to plotting\n\n\n\n\nDiscontinuous NKDE can be counterintuitive, resulting in sharp differences between density values across the network, particularly problematic in networks with many closely spaced intersections. The continuous method adjusts NKDE values at intersections to ensure the kernel integrates to one, applying a backward correction to maintain continuity in density values. However, this method is recursive and computationally time-consuming.\nSee the NKDE plot using the continuous method below!\n\ncontinuous_densities &lt;- nkde(lines = network, events = childcare,\n                  w = rep(1, nrow(childcare)), samples = samples,\n                  kernel_name = \"quartic\", bw = 300, \n                  div= \"bw\", method = \"continuous\", \n                  digits = 1, tol = 1,\n                  grid_shape = c(1,1), max_depth = 8,\n                  agg = 5, sparse = TRUE,\n                  verbose = FALSE)\n\n\nsamples$continuous_density &lt;- continuous_densities*1000\nlixels$continuous_density &lt;- continuous_densities*1000\ntmap_mode('view')\n\ntmap mode set to interactive viewing\n\ntm_shape(lixels) +\n  tm_lines(col=\"continuous_density\") +\n  tm_shape(childcare) +\n  tm_dots()\n\n\n\n\n\ntmap_mode('plot')\n\ntmap mode set to plotting"
+  },
+  {
+    "objectID": "Hands-on_Ex/Hands-on_Ex03/Hands-on_Ex03.html#network-g-function",
+    "href": "Hands-on_Ex/Hands-on_Ex03/Hands-on_Ex03.html#network-g-function",
+    "title": "Hands-on Ex 3",
+    "section": "5.2 Network G-function",
+    "text": "5.2 Network G-function\nThe blue line represents the empirical network G-function of the childcare centers in Punggol. Since the blue line falls below the lower boundary of the envelope in the 100-200m distance range, it suggests a regular pattern of childcare center locations along the Punggol road network.\n\nkfun_childcare$plotg"
   }
 ]
