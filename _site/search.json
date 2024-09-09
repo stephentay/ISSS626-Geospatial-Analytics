@@ -278,5 +278,26 @@
     "title": "In-class Ex 1",
     "section": "3.2 Projection Transformation",
     "text": "3.2 Projection Transformation\nThe CRS of mpsz19 is in WGS 84, which is a Geographical Coordinate System, useful in GPS to pinpoint a specific location, and the unit of measurement is in decimal degree. However, it is not suitable for geospatial analysis as the distance measurement of decimal degree is distorted. We will need to transform it from geographic coordinate system to projected coordinate system.\nIn this code, we could build a pipe to import the data and transform it to projected coordinate system.\n\nmpsz19_shp &lt;- st_read(dsn = \"data/geospatial\", \n                  layer = \"MPSZ-2019\") %&gt;%\n  st_transform(crs = 3414)\n\nReading layer `MPSZ-2019' from data source \n  `/Users/stephentay/stephentay/ISSS626-Geospatial-Analytics/In-class_Ex/In-class_Ex01/data/geospatial' \n  using driver `ESRI Shapefile'\nSimple feature collection with 332 features and 6 fields\nGeometry type: MULTIPOLYGON\nDimension:     XY\nBounding box:  xmin: 103.6057 ymin: 1.158699 xmax: 104.0885 ymax: 1.470775\nGeodetic CRS:  WGS 84"
+  },
+  {
+    "objectID": "In-class_Ex/In-class_Ex03/In-class_Ex03.html",
+    "href": "In-class_Ex/In-class_Ex03/In-class_Ex03.html",
+    "title": "In-class Ex 3",
+    "section": "",
+    "text": "pacman::p_load(sf, spNetwork, tmap, tidyverse)"
+  },
+  {
+    "objectID": "In-class_Ex/In-class_Ex03/In-class_Ex03.html#prepare-lixels",
+    "href": "In-class_Ex/In-class_Ex03/In-class_Ex03.html#prepare-lixels",
+    "title": "In-class Ex 3",
+    "section": "4.1 Prepare lixels",
+    "text": "4.1 Prepare lixels\n700m was chosen as the lixel length because it’s based on a research on the walkable distance in Singapore environment. Minimum distance was arbitrarily set at 350m.\n\nlixels &lt;- lixelize_lines(network, \n                         lx_length = 700, \n                         mindist = 350)\nnrow(lixels)\n\n[1] 2645\n\n\n\nlixels &lt;- lixelize_lines(network, \n                         lx_length = 700, \n                         mindist = 50)\nnrow(lixels)\n\n[1] 2648\n\n\nlength of distance should not be shorter than the distance between data points. use nearest neighbor method and test out 10th, 25th percentile of the distance between points.\n\nlixels &lt;- lixelize_lines(network, \n                         lx_length = 1000, \n                         mindist = 150)\nnrow(lixels)\n\n[1] 2645\n\n\n\nsamples &lt;- lines_center(lixels) \n\n\ntmap_mode('view')\ntm_shape(lixels) + \n  tm_lines() + \n  tm_shape(samples) +\n  tm_dots(size = 0.01)\n\n\n\n\n\ntmap_mode('plot')\n\n\nsimple_densities &lt;- nkde(lines = network, events = childcare,\n                  w = rep(1, nrow(childcare)), samples = samples,\n                  kernel_name = \"quartic\", bw = 300, \n                  div= \"bw\", method = \"simple\", \n                  digits = 1, tol = 1,\n                  grid_shape = c(1,1), max_depth = 8,\n                  agg = 5, sparse = TRUE,\n                  verbose = FALSE)\n\n\n# number per kilometer\nsamples$simple_density &lt;- simple_densities*1000\nlixels$simple_density &lt;- simple_densities*1000\ntmap_mode('view')\ntm_shape(lixels) +\n  tm_lines(col=\"simple_density\") +\n  tm_shape(childcare) +\n  tm_dots()\n\n\n\n\n\ntmap_mode('plot')"
+  },
+  {
+    "objectID": "In-class_Ex/In-class_Ex03/In-class_Ex03.html#network-k-function",
+    "href": "In-class_Ex/In-class_Ex03/In-class_Ex03.html#network-k-function",
+    "title": "In-class Ex 3",
+    "section": "5.1 Network K-function",
+    "text": "5.1 Network K-function\nThe blue line represents the empirical network K-function of the childcare centers in Punggol, while the gray area shows the results of 1,000 simulations within the 2.5% - 97.5% confidence interval. Since the blue line falls below the lower boundary of the envelope between the 200-400m distance range, it indicates a regular pattern of childcare center locations along the Punggol road network. The childcare centers are regularly spaced between 200-400m.\n\nkfun_childcare$plotk\n\n\n\n\n\nkfun_childcare$plotg"
   }
 ]
