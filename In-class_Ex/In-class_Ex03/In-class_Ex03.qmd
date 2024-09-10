@@ -13,22 +13,41 @@ execute:
 ---
 
 
-# 1. 
+# Overview
+
+In this in-class exercise, we will highlight common mistakes and blind spots encountered when working with geospatial data or utilizing R’s geospatial packages.
+
 ```{r}
 pacman::p_load(sf, spNetwork, tmap, tidyverse)
 ```
 
-# 2. Loading Data
+# 1. Importing & Transforming Data
+
+First, let's import two geospatial datasets that we will be working with:
+
+- `Punggol_St`: A line feature dataset representing the road network within the Punggol Planning Area.
+- `Punggol_CC`: A point feature dataset representing the locations of childcare centers within the Punggol Planning Area.
+
+::: panel-tabset
+## 1.1 Punggol Road Network
+The road network is provided in ESRI shapefile format. We use `st_read()` to load the file, without the need to specify the shapefile extension.
+
 ```{r}
 network <- st_read(dsn="data/geospatial", 
                    layer="Punggol_St")
 ```
 
-# 2.2 Punggol Childcare Centers
-Childcare point geometries are in 3-dimensional coordinates, they must be transformed to 2-dimensional coordinates using the `st_zm()` method.
+## 1.2 Punggol Childcare Centers (3D coordinates)
+Using `st_read()` to load the childcare shapefile returned a message indicating that the coordinate dimension is **XYZ**, meaning it is in 3D. However, for our analysis with the `spNetwork` package, the coordinates must be 2-dimensional; otherwise, the analysis will not work. 
 
 ```{r}
-#| include: false
+childcare <- st_read(dsn="data/geospatial", layer="Punggol_CC")
+```
+
+## 1.3 Punggol Childcare Centers (transformed to 2D coordinates)
+The 3D point coordinates can be converted to 2-dimensional by using the `st_zm()` function, which removes the z-coordinates. 
+
+```{r}
 childcare <- st_read(dsn="data/geospatial", layer="Punggol_CC") %>%
   st_zm(drop = TRUE, what = "ZM")
 ```
@@ -36,23 +55,35 @@ childcare <- st_read(dsn="data/geospatial", layer="Punggol_CC") %>%
 ```{r}
 childcare
 ```
+:::
 
-# 3. Plotting
-Plot the road network first, followed by the points. `add = TRUE` adds the point layer on the road network.
+# 2. GeoVisualisation
+
+::: panel-tabset
+## Note #1 on `plot()`
+Always plot the road network first, then the points. Use `add = TRUE` to overlay the points on the road network.
+
 ```{r}
 plot(st_geometry(network))
-plot(childcare,add=T,col='red',pch = 19)
+plot(childcare, add=TRUE, col='red', pch = 19)
 ```
 
-If you just `plot(network)`, it will plot every column in the network sf dataset, which is meaningless. Thus, the correct way is to use `plot(st_geometry(network))` as above.
+## Note #2 on `plot()`
+If you use `plot(network)` instead of `plot(st_geometry(network))`, it will attempt to plot every column in the network sf dataset, which is not useful. Therefore, the correct approach is to use `plot(st_geometry(network))`.
+
+If the color for the point sf dataset has been specified (e.g. 'red'), there’s no need to use `plot(st_geometry(childcare))`, as the color is already applied to each column in the childcare sf dataset.
+
 ```{r}
 plot(network)
-plot(childcare,add=T,col='red',pch = 19)
+plot(childcare, add=TRUE, col='red', pch = 19)
 ```
-`tmap_mode('plot')` will just plot a static map.
-Specify the layer to use using `tm_shape()`. 
-tm_symbols() and tm_markers() when you want to customise the display of the points using png files.
-Use `tm_square()`, `tm_bubbles()`, `tm_dots` for standard display of points. 
+## Note #3 on `tmap`
+
+- `tmap_mode('plot')` generates a static map. 
+- **For each layer**, you need to specify the map layer using `tm_shape()`. 
+- Use `tm_symbols()` or `tm_markers()` when customizing point images with PNG files. 
+- For standard point displays, use `tm_square()`, `tm_bubbles()`, or `tm_dots()`.
+ 
 ```{r}
 tmap_mode('plot')
 tm_shape(childcare) + 
@@ -61,8 +92,9 @@ tm_shape(childcare) +
   tm_lines()
 ```
 
+## Note #4 on `tmap`
+`tmap_mode('view')` generates an interactive map. Remember to switch back to static mode by ending with `tmap_mode('plot')`.
 
-`tmap_mode('view')` will plot an interactive map.
 ```{r}
 tmap_mode('view')
 tm_shape(childcare) + 
@@ -71,13 +103,16 @@ tm_shape(childcare) +
   tm_lines()
 tmap_mode('plot')
 ```
+:::
 
 
-# 4. Network Kernel Density Estimation (NKDE) Analysis
+# 3. Network Kernel Density Estimation (NKDE) Analysis
 
-## 4.1 Prepare lixels
-700m was chosen as the lixel length because it's based on a research on the walkable distance in Singapore environment. 
-Minimum distance was arbitrarily set at 350m.
+::: panel-tabset
+## Note #1 on lixels
+A lixel length of 700m was chosen based on research regarding walkable distances in the Singaporean environment. The minimum distance was set at 350m, which is arbitrarily half of the 700m. 
+
+The road network contains 2,642 line geometries. With a lixel length of 700m and a minimum distance of 350m, 2,645 lixels are generated.
 ```{r}
 lixels <- lixelize_lines(network, 
                          lx_length = 700, 
@@ -85,7 +120,7 @@ lixels <- lixelize_lines(network,
 nrow(lixels)
 ```
 
-
+When the minimum distance is reduced to 50m, 2,648 lixels are generated.
 ```{r}
 lixels <- lixelize_lines(network, 
                          lx_length = 700, 
@@ -93,8 +128,7 @@ lixels <- lixelize_lines(network,
 nrow(lixels)
 ```
 
-length of distance should not be shorter than the distance between data points. 
-use nearest neighbor method and test out 10th, 25th percentile of the distance between points.
+With a lixel length of 1000m and a minimum distance of 150m, 2,645 lixels are generated
 ```{r}
 lixels <- lixelize_lines(network, 
                          lx_length = 1000, 
@@ -102,13 +136,16 @@ lixels <- lixelize_lines(network,
 nrow(lixels)
 ```
 
+::: callout-important
+The lixel length should be meaningful and reflective of real-world phenomena (e.g., 700m for walkable distance). It’s also important that the lixel length is not shorter than the distance between data points. Best practice: Use the nearest neighbor method and test the 10th, 20th, or 25th percentile of the distance between points to determine the optimal lixel length.
+:::
+
+## Note #2 on lixels
+You may plot your lixels using the code chunk below:
 
 ```{r}
 samples <- lines_center(lixels) 
-```
 
-
-```{r}
 tmap_mode('view')
 tm_shape(lixels) + 
   tm_lines() + 
@@ -117,7 +154,12 @@ tm_shape(lixels) +
 tmap_mode('plot')
 ```
 
+## Note #3 on NKDE
+There are three methods for computing NKDE: `method = "simple"` for the simple method, `method = "discontinuous"` for the discontinuous method, and `method = "continuous"` for the continuous method.
 
+The continuous method works best for grid networks, but it is very time-consuming. For networks consisting of parallel straight highways, any of the methods will yield similar results.
+
+In the code chunk below, the simple method is used.
 ```{r}
 simple_densities <- nkde(lines = network, events = childcare,
                   w = rep(1, nrow(childcare)), samples = samples,
@@ -129,10 +171,11 @@ simple_densities <- nkde(lines = network, events = childcare,
                   verbose = FALSE)
 ```
 
+The densities represent the number of childcare centers per meter, but it is more meaningful to express them as centers per kilometer. Since the network consists of line geometries, you can convert the density by multiplying by 1,000. (Note: for planar KDE, where densities are measured per square meter, the conversion would require multiplying by 1,000 * 1,000).
 ```{r}
-# number per kilometer
 samples$simple_density <- simple_densities*1000
 lixels$simple_density <- simple_densities*1000
+
 tmap_mode('view')
 tm_shape(lixels) +
   tm_lines(col="simple_density") +
@@ -140,16 +183,14 @@ tm_shape(lixels) +
   tm_dots()
 tmap_mode('plot')
 ```
+:::
 
-# 5. Network-constrained G- and K-function analysis
-A test for complete spatial randomness (CSR) can be performed using the **network-constrained G- and K-functions**.
+# 4. Network-constrained G- and K-function analysis
+A test for complete spatial randomness (CSR) can be conducted using **network-constrained G- and K-functions**, both of which can be implemented with spNetwork’s `kfunctions()`.
 
-The test hypotheses are as follows:
-
--   H0: The distribution of childcare services in Punggol are randomly distributed along the road network.
--   H1: The distribution of childcare services in Punggol are not randomly distributed along the road network.
-
-Alpha is set at 0.05, with 1000 Monte-carlo simulations.
+::: panel-tabset
+## Note #1 on simulations
+Note that the simulation index starts at 0, so to perform 1,000 Monte Carlo simulations, you should set `nsim` to 999.
 
 ```{r}
 set.seed(2024)
@@ -159,20 +200,24 @@ kfun_childcare <- kfunctions(network,
                              end = 1000, 
                              step = 50, 
                              width = 50, 
-                             nsim = 1000, 
+                             nsim = 999, 
                              resolution = 50,
                              verbose = FALSE, 
                              conf_int = 0.05)
 ```
 
-## 5.1 Network K-function
-The blue line represents the empirical network K-function of the childcare centers in Punggol, while the gray area shows the results of 1,000 simulations within the 2.5% - 97.5% confidence interval. Since the blue line falls below the lower boundary of the envelope between the 200-400m distance range, it indicates a regular pattern of childcare center locations along the Punggol road network. The childcare centers are regularly spaced between 200-400m.
+## Note #2 on K-function
+The output of `kfunctions()` includes both the K-function and G-function plots. Use the code below to generate the K-function plot.
+
+**Here's how to interpret the plot:** The blue line represents the empirical network K-function of the childcare centers in Punggol, while the gray area shows the results of 1,000 simulations within the 2.5% - 97.5% confidence interval. Since the blue line falls below the lower boundary of the envelope between the 200-400m distance range, it indicates a regular pattern of childcare center locations along the Punggol road network. **The childcare centers are regularly spaced between 200-400m.**
 ```{r}
 kfun_childcare$plotk
 ```
 
+## Note #3 on G-function
+The output of `kfunctions()` includes both the K-function and G-function plots. Use the code below to generate the G-function plot.
 
 ```{r}
 kfun_childcare$plotg
 ```
-
+:::
