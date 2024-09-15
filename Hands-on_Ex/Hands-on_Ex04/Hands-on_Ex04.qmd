@@ -225,41 +225,45 @@ plot(knn6, coords, pch = 19, cex = 0.6, add = TRUE, col = "red")
 ```
 :::
 
-# 6. 
+# 6. Weights based on IDW
+To derive a spatial weight matrix based on Inversed Distance method, we first compute the distances between areas.
 ```{r}
 dist <- nbdists(wm_q, coords, longlat = TRUE)
 ids <- lapply(dist, function(x) 1/(x))
 ids
 ```
 
-8.8
+# 7. Row-standardised Weights Matrix
+
+- Neighboring polygons are assigned equal weights using the style=“W” option.
+- Each neighbor receives a weight of 1/(# of neighbors), and the weighted values are summed.
+- A drawback is that polygons along the edges of the study area may base their values on fewer neighbors, leading to potential over- or under-estimation of spatial autocorrelation.
+- Although “W” is used for simplicity, other more robust weighting styles, such as style=“B”, are available.
 ```{r}
 rswm_q <- nb2listw(wm_q, style="W", zero.policy = TRUE)
 rswm_q
 ```
 
-
+Use the following code to view the weights assigned to the first polygon’s eight neighbors. Each neighbor receives a weight of 0.125, meaning that when R calculates the average neighboring income, each neighbor’s income is multiplied by 0.125 before being summed.
 ```{r}
 rswm_q$weights[10]
 ```
 
-
+Using the same approach, we can derive a row-standardized distance weight matrix with the code snippet below.
 ```{r}
 rswm_ids <- nb2listw(wm_q, glist=ids, style="B", zero.policy=TRUE)
 rswm_ids
 ```
 
-
 ```{r}
 rswm_ids$weights[1]
 ```
-
 
 ```{r}
 summary(unlist(rswm_ids$weights))
 ```
 
-8.9.1
+# 8. Application of Spatial Weight Matrix
 ```{r}
 GDPPC.lag <- lag.listw(rswm_q, hunan$GDPPC)
 GDPPC.lag

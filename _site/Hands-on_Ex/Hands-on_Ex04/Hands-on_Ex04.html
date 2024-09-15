@@ -215,6 +215,9 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#geovisualisation-choropleth-map" id="toc-geovisualisation-choropleth-map" class="nav-link" data-scroll-target="#geovisualisation-choropleth-map">3. Geovisualisation &amp; Choropleth Map</a></li>
   <li><a href="#contiguity-spatial-weights" id="toc-contiguity-spatial-weights" class="nav-link" data-scroll-target="#contiguity-spatial-weights">4. Contiguity Spatial Weights</a></li>
   <li><a href="#distance-based-neighbours" id="toc-distance-based-neighbours" class="nav-link" data-scroll-target="#distance-based-neighbours">5. Distance based neighbours</a></li>
+  <li><a href="#weights-based-on-idw" id="toc-weights-based-on-idw" class="nav-link" data-scroll-target="#weights-based-on-idw">6. Weights based on IDW</a></li>
+  <li><a href="#row-standardised-weights-matrix" id="toc-row-standardised-weights-matrix" class="nav-link" data-scroll-target="#row-standardised-weights-matrix">7. Row-standardised Weights Matrix</a></li>
+  <li><a href="#application-of-spatial-weight-matrix" id="toc-application-of-spatial-weight-matrix" class="nav-link" data-scroll-target="#application-of-spatial-weight-matrix">8. Application of Spatial Weight Matrix</a></li>
   </ul>
 </nav>
     </div>
@@ -1004,7 +1007,10 @@ Non-symmetric neighbours list</code></pre>
 </div>
 </div>
 </div>
-<p>8.7</p>
+</section>
+<section id="weights-based-on-idw" class="level1">
+<h1>6. Weights based on IDW</h1>
+<p>To derive a spatial weight matrix based on Inversed Distance method, we first compute the distances between areas.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb48"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb48-1"><a href="#cb48-1" aria-hidden="true" tabindex="-1"></a>dist <span class="ot">&lt;-</span> <span class="fu">nbdists</span>(wm_q, coords, <span class="at">longlat =</span> <span class="cn">TRUE</span>)</span>
 <span id="cb48-2"><a href="#cb48-2" aria-hidden="true" tabindex="-1"></a>ids <span class="ot">&lt;-</span> <span class="fu">lapply</span>(dist, <span class="cf">function</span>(x) <span class="dv">1</span><span class="sc">/</span>(x))</span>
@@ -1283,7 +1289,15 @@ Non-symmetric neighbours list</code></pre>
 [1] 0.01785036 0.02058034</code></pre>
 </div>
 </div>
-<p>8.8</p>
+</section>
+<section id="row-standardised-weights-matrix" class="level1">
+<h1>7. Row-standardised Weights Matrix</h1>
+<ul>
+<li>Neighboring polygons are assigned equal weights using the style=“W” option.</li>
+<li>Each neighbor receives a weight of 1/(# of neighbors), and the weighted values are summed.</li>
+<li>A drawback is that polygons along the edges of the study area may base their values on fewer neighbors, leading to potential over- or under-estimation of spatial autocorrelation.</li>
+<li>Although “W” is used for simplicity, other more robust weighting styles, such as style=“B”, are available.</li>
+</ul>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb50"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb50-1"><a href="#cb50-1" aria-hidden="true" tabindex="-1"></a>rswm_q <span class="ot">&lt;-</span> <span class="fu">nb2listw</span>(wm_q, <span class="at">style=</span><span class="st">"W"</span>, <span class="at">zero.policy =</span> <span class="cn">TRUE</span>)</span>
 <span id="cb50-2"><a href="#cb50-2" aria-hidden="true" tabindex="-1"></a>rswm_q</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
@@ -1301,6 +1315,7 @@ Weights constants summary:
 W 88 7744 88 37.86334 365.9147</code></pre>
 </div>
 </div>
+<p>Use the following code to view the weights assigned to the first polygon’s eight neighbors. Each neighbor receives a weight of 0.125, meaning that when R calculates the average neighboring income, each neighbor’s income is multiplied by 0.125 before being summed.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb52"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb52-1"><a href="#cb52-1" aria-hidden="true" tabindex="-1"></a>rswm_q<span class="sc">$</span>weights[<span class="dv">10</span>]</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
@@ -1308,6 +1323,7 @@ W 88 7744 88 37.86334 365.9147</code></pre>
 [1] 0.125 0.125 0.125 0.125 0.125 0.125 0.125 0.125</code></pre>
 </div>
 </div>
+<p>Using the same approach, we can derive a row-standardized distance weight matrix with the code snippet below.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb54"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb54-1"><a href="#cb54-1" aria-hidden="true" tabindex="-1"></a>rswm_ids <span class="ot">&lt;-</span> <span class="fu">nb2listw</span>(wm_q, <span class="at">glist=</span>ids, <span class="at">style=</span><span class="st">"B"</span>, <span class="at">zero.policy=</span><span class="cn">TRUE</span>)</span>
 <span id="cb54-2"><a href="#cb54-2" aria-hidden="true" tabindex="-1"></a>rswm_ids</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
@@ -1339,7 +1355,9 @@ B 88 7744 8.786867 0.3776535 3.8137</code></pre>
 0.008218 0.015088 0.018739 0.019614 0.022823 0.040338 </code></pre>
 </div>
 </div>
-<p>8.9.1</p>
+</section>
+<section id="application-of-spatial-weight-matrix" class="level1">
+<h1>8. Application of Spatial Weight Matrix</h1>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb60"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb60-1"><a href="#cb60-1" aria-hidden="true" tabindex="-1"></a>GDPPC.lag <span class="ot">&lt;-</span> <span class="fu">lag.listw</span>(rswm_q, hunan<span class="sc">$</span>GDPPC)</span>
 <span id="cb60-2"><a href="#cb60-2" aria-hidden="true" tabindex="-1"></a>GDPPC.lag</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
