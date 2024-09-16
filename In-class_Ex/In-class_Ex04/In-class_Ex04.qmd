@@ -1,0 +1,483 @@
+---
+title: "In-class Ex 4"
+subtitle: ""
+author: "Stephen Tay"
+date: "16 Sep 2024"
+date-modified:  "last-modified"
+execute: 
+  eval: true
+  echo: true
+  message: false
+  warning: false
+  freeze: true 
+---
+
+# Overview
+In this in-class exercise, we will use R’s `GWmodel` package for spatial weight analysis. One key feature we will explore is the **geographically weighted summary statistics**.
+
+```{r}
+pacman::p_load(sf, ggstatsplot, tmap, tidyverse, knitr, GWmodel)
+```
+
+# 1. Importing & Transforming Data
+Two datasets will be used in this in-class exercise:
+
+- **Hunan County Boundary Layer**: A geospatial dataset in ESRI shapefile format.
+- **Hunan_2012.csv**: A CSV file containing selected local development indicators for Hunan in 2012.
+
+::: panel-tabset
+## Hunan shapefile
+In this in-class exercise, there’s no need to convert the Geographical Coordinate System to a projected coordinate system. The package used for calculating distances between neighbors automatically converts the Geographical Coordinate System into kilometers.
+```{r}
+hunan_sf <- st_read(dsn = "data/geospatial", 
+                 layer = "Hunan") 
+```
+
+## Hunan 2012 development indicators
+```{r}
+hunan2012 <- read_csv("data/aspatial/Hunan_2012.csv")
+glimpse(hunan2012)
+```
+
+## Combining datasets
+Some development indicators from `hunan2012` are needed to be added into hunan's sf dataframe. The datasets are joined by **County**. You need to select the variables of interest in your dataset and drop all others before you start your analysis.
+```{r}
+hunan_sf <- left_join(hunan_sf, hunan2012, by = "County") %>%
+  select(1:3, 7, 15, 16, 31, 32)
+glimpse(hunan_sf)
+```
+## Converting to SpatialPolygonDataFrame
+The `GWmodel` package is currently designed to work with the older `sp` format rather than the newer `sf` format for handling spatial data in R. Thus, we need to convert it to the `sp` format.
+```{r}
+hunan_sp <- hunan_sf %>%
+  as_Spatial()
+```
+:::
+
+# 2. Geographically Weighted Summary Statistics with Adaptive Bandwidth
+We need to determine adapative bandwidth. There are two methods:
+
+::: panel-tabset
+## 2.1 Cross-validation
+This is based on regression. GDPPC is the dependent variable, and 1 as the arbitary independent variable. 
+Since we are using Geographical Coordinate System which is in degre, we set `longlat = TRUE`, and it will calculate great circle distances in kilometer.
+```{r}
+bw_CV <- bw.gwr(GDPPC ~ 1,
+                data = hunan_sp,
+                approach = "CV",
+                adaptive = TRUE,
+                kernel = "bisquare",
+                longlat = TRUE)
+```
+This is the number of nearest neighbours that you should choose.
+```{r}
+bw_CV
+```
+
+## 2.2 AIC
+Choose the adapative bandwidth with the least AIC value.
+```{r}
+bw_AIC <- bw.gwr(GDPPC ~ 1,
+                data = hunan_sp,
+                approach = "AIC",
+                adaptive = TRUE,
+                kernel = "bisquare",
+                longlat = TRUE)
+```
+This is the number of nearest neighbours that you should choose, which is the same result from the cross-validation method.
+Sometimes the result may differ, both methods are acceptable.
+```{r}
+bw_AIC
+```
+:::
+
+# 3. Geographically Weighted Summary Statistics with Fixed Bandwidth
+We need to determine fixed bandwidth.
+
+::: panel-tabset
+## 3.1 Cross-validation
+```{r}
+bw_CV <- bw.gwr(GDPPC ~ 1,
+                data = hunan_sp,
+                approach = "CV",
+                adaptive = FALSE,
+                kernel = "bisquare",
+                longlat = TRUE)
+```
+
+```{r}
+bw_CV
+```
+
+## 3.2 AIC
+
+```{r}
+bw_AIC <- bw.gwr(GDPPC ~ 1,
+                data = hunan_sp,
+                approach = "AIC",
+                adaptive = FALSE,
+                kernel = "bisquare",
+                longlat = TRUE)
+```
+This is more than twice the fixed bandwidth based on cross-validation method. You need to compare and choose the one that is more sensible/meaningful. In this case, it may be better to use adaptive bandwidth method as their CV and AIC methods yield similar results.
+
+When the bandwidth is shorter, the output will be spikier. When the bandwidth is longer, the output will be smoother.
+```{r}
+bw_AIC
+```
+:::
+
+# 4. Computing Geographically Weighted Summary Statistics (Adaptive Bandwidth)
+
+```{r}
+gwstat <- gwss(data = hunan_sp,
+               vars = "GDPPC",
+               bw = bw_AIC,
+               kernel = "bisquare",
+               adaptive = TRUE,
+               longlat = TRUE)
+```
+
+GDPPC_LM is the local mean of the variable within the local neighbourhood (taking the 22 neighbours to compute the mean). _LSD is the standard deviation. _LVar is the variance. _LSKe is the Local Skewness. _LCV is the Local Coefficient of Variation.
+```{r}
+gwstat_df <- as.data.frame(gwstat$SDF)
+glimpse(gwstat_df)
+```
+You can use `cbind` (i.e. column join) as long as you did not do any programmatically sorting.
+```{r}
+hunan_gstat <- cbind(hunan_sf, gwstat_df)
+glimpse(hunan_gstat)
+```
+
+```{r}
+tm_shape(hunan_gstat) + # display all polygons
+  tm_fill("GDPPC_LM",
+          n = 5,
+          style = "quantile") + #classification method is quantile
+  tm_borders(alpha = 0.5) + #set colour of boundary
+  tm_layout(main.title = "Distribution of geographically weighted mean",
+            main.title.position = "center",
+            main.title.size = 1,
+            legend.text.size = 0.6,
+            legend.height = 0.6,
+            legend.width = 0.6,
+            frame = TRUE)
+```
+
+# 5. Geographically Weighted Correlation with Adaptive Bandwidth
+**Business question:** Is there any relationship between GDP per capita and Gross Industry Output?
+
+## 5.1 Conventional Statistical Solution
+```{r}
+
+```
+
+## 5.2 Geospatial Analytical Solution
+```{r}
+
+```
+
+```{r}
+# gwstats <- gwss(data = hunan_sp,
+#                vars = c("GDPPC", "GIO"),
+#                bw = bw,
+#                kernel = "bisquare",
+#                adaptive = TRUE,
+#                longlat = TRUE)
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
