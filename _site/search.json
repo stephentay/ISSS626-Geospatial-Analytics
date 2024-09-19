@@ -347,13 +347,20 @@
     "href": "In-class_Ex/In-class_Ex04/In-class_Ex04.html#conventional-statistical-solution",
     "title": "In-class Ex 4",
     "section": "5.1 Conventional Statistical Solution",
-    "text": "5.1 Conventional Statistical Solution"
+    "text": "5.1 Conventional Statistical Solution\nThe conventional approach to correlation involves calculating the relationship between two variables without considering geographic factors. While useful, this method is limited because it doesn’t reveal how the correlation varies across a region or how it may be influenced by neighboring areas.\n\nggscatterstats(\n  data = hunan2012, \n  x = Agri, \n  y = GDPPC,\n  xlab = \"Gross Agriculture Output\", ## label for the x-axis\n  ylab = \"GDP per capita\", \n  label.var = County, \n  label.expression = Agri &gt; 10000 & GDPPC &gt; 50000, \n  point.label.args = list(alpha = 0.7, size = 4, color = \"grey50\"),\n  xfill = \"#CC79A7\", \n  yfill = \"#009E73\", \n  title = \"Relationship between GDP PC and Gross Agriculture Output\")"
   },
   {
     "objectID": "In-class_Ex/In-class_Ex04/In-class_Ex04.html#geospatial-analytical-solution",
     "href": "In-class_Ex/In-class_Ex04/In-class_Ex04.html#geospatial-analytical-solution",
     "title": "In-class Ex 4",
     "section": "5.2 Geospatial Analytical Solution",
-    "text": "5.2 Geospatial Analytical Solution\n\n# gwstats &lt;- gwss(data = hunan_sp,\n#                vars = c(\"GDPPC\", \"GIO\"),\n#                bw = bw,\n#                kernel = \"bisquare\",\n#                adaptive = TRUE,\n#                longlat = TRUE)"
+    "text": "5.2 Geospatial Analytical Solution\nA geospatial approach, such as geographically weighted correlation (GWC), adds deeper insights by accounting for spatial variability. To perform GWC, we first determine the appropriate bandwidth, then compute the geographically weighted correlation, and finally append the results to the hunan_sf data frame.\n\n# Step 1: Determining the bandwidth\nbw &lt;- bw.gwr(GDPPC ~ GIO, \n             data = hunan_sp, \n             approach = \"AICc\", \n             adaptive = TRUE)\n\nAdaptive bandwidth (number of nearest neighbours): 62 AICc value: 1870.235 \nAdaptive bandwidth (number of nearest neighbours): 46 AICc value: 1870.852 \nAdaptive bandwidth (number of nearest neighbours): 72 AICc value: 1869.744 \nAdaptive bandwidth (number of nearest neighbours): 78 AICc value: 1869.713 \nAdaptive bandwidth (number of nearest neighbours): 82 AICc value: 1869.604 \nAdaptive bandwidth (number of nearest neighbours): 84 AICc value: 1869.537 \nAdaptive bandwidth (number of nearest neighbours): 86 AICc value: 1869.647 \nAdaptive bandwidth (number of nearest neighbours): 83 AICc value: 1869.567 \nAdaptive bandwidth (number of nearest neighbours): 84 AICc value: 1869.537 \n\n\n\n# Step 2: Computing the geographical weighted correlation\ngwstats &lt;- gwss(data = hunan_sp,\n               vars = c(\"GDPPC\", \"GIO\"),\n               bw = bw,\n               kernel = \"bisquare\",\n               adaptive = TRUE,\n               longlat = TRUE)\n\n\n# Step 3: Extracting SDF data table from gwss output, and appending the results\ngwstat_df &lt;- as.data.frame(gwstats$SDF) %&gt;%\n  select(c(12,13)) %&gt;%\n  rename(gwCorr = Corr_GDPPC.GIO,\n         gwSpearman = Spearman_rho_GDPPC.GIO)\n\nhunan_Corr &lt;- cbind(hunan_sf, gwstat_df)"
+  },
+  {
+    "objectID": "In-class_Ex/In-class_Ex04/In-class_Ex04.html#visualising-local-correlation-using-spearman-rho",
+    "href": "In-class_Ex/In-class_Ex04/In-class_Ex04.html#visualising-local-correlation-using-spearman-rho",
+    "title": "In-class Ex 4",
+    "section": "5.3 Visualising Local Correlation using Spearman Rho",
+    "text": "5.3 Visualising Local Correlation using Spearman Rho\nWe use Spearman’s Rho because it is a non-parametric statistic, making it robust for handling non-linear relationships and ranked data.\n\ntm_shape(hunan_Corr) +\n  tm_fill(\"gwSpearman\",\n          n = 5,\n          style = \"quantile\") +\n  tm_borders(alpha = 0.5) +\n  tm_layout(main.title = \"Local Spearman Rho\",\n            main.title.position = \"center\",\n            main.title.size = 1.0,\n            legend.text.size = 0.6,\n            legend.height = 0.6, \n            legend.width = 0.6,\n            frame = TRUE)"
   }
 ]

@@ -168,316 +168,69 @@ tm_shape(hunan_gstat) + # display all polygons
 **Business question:** Is there any relationship between GDP per capita and Gross Industry Output?
 
 ## 5.1 Conventional Statistical Solution
-```{r}
+The conventional approach to correlation involves calculating the relationship between two variables without considering geographic factors. While useful, this method is limited because it doesn’t reveal how the correlation varies across a region or how it may be influenced by neighboring areas.
 
+```{r}
+ggscatterstats(
+  data = hunan2012, 
+  x = Agri, 
+  y = GDPPC,
+  xlab = "Gross Agriculture Output", ## label for the x-axis
+  ylab = "GDP per capita", 
+  label.var = County, 
+  label.expression = Agri > 10000 & GDPPC > 50000, 
+  point.label.args = list(alpha = 0.7, size = 4, color = "grey50"),
+  xfill = "#CC79A7", 
+  yfill = "#009E73", 
+  title = "Relationship between GDP PC and Gross Agriculture Output")
 ```
 
 ## 5.2 Geospatial Analytical Solution
-```{r}
-
-```
-
-```{r}
-# gwstats <- gwss(data = hunan_sp,
-#                vars = c("GDPPC", "GIO"),
-#                bw = bw,
-#                kernel = "bisquare",
-#                adaptive = TRUE,
-#                longlat = TRUE)
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
+A geospatial approach, such as geographically weighted correlation (GWC), adds deeper insights by accounting for spatial variability.
+To perform GWC, we first determine the appropriate bandwidth, then compute the geographically weighted correlation, and finally append the results to the `hunan_sf` data frame. 
 
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
 ```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
+# Step 1: Determining the bandwidth
+bw <- bw.gwr(GDPPC ~ GIO, 
+             data = hunan_sp, 
+             approach = "AICc", 
+             adaptive = TRUE)
 ```
 
 ```{r}
-
-```
-
-```{r}
-
+# Step 2: Computing the geographical weighted correlation
+gwstats <- gwss(data = hunan_sp,
+               vars = c("GDPPC", "GIO"),
+               bw = bw,
+               kernel = "bisquare",
+               adaptive = TRUE,
+               longlat = TRUE)
 ```
 
 ```{r}
+# Step 3: Extracting SDF data table from gwss output, and appending the results
+gwstat_df <- as.data.frame(gwstats$SDF) %>%
+  select(c(12,13)) %>%
+  rename(gwCorr = Corr_GDPPC.GIO,
+         gwSpearman = Spearman_rho_GDPPC.GIO)
 
+hunan_Corr <- cbind(hunan_sf, gwstat_df)
 ```
 
+## 5.3 Visualising Local Correlation using Spearman Rho
+We use **Spearman’s Rho** because it is a non-parametric statistic, making it robust for handling non-linear relationships and ranked data.
 ```{r}
-
+tm_shape(hunan_Corr) +
+  tm_fill("gwSpearman",
+          n = 5,
+          style = "quantile") +
+  tm_borders(alpha = 0.5) +
+  tm_layout(main.title = "Local Spearman Rho",
+            main.title.position = "center",
+            main.title.size = 1.0,
+            legend.text.size = 0.6,
+            legend.height = 0.6, 
+            legend.width = 0.6,
+            frame = TRUE)
 ```
 
-```{r}
-
-```

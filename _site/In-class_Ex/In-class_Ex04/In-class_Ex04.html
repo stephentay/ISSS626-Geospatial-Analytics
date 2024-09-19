@@ -219,6 +219,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <ul class="collapse">
   <li><a href="#conventional-statistical-solution" id="toc-conventional-statistical-solution" class="nav-link" data-scroll-target="#conventional-statistical-solution">5.1 Conventional Statistical Solution</a></li>
   <li><a href="#geospatial-analytical-solution" id="toc-geospatial-analytical-solution" class="nav-link" data-scroll-target="#geospatial-analytical-solution">5.2 Geospatial Analytical Solution</a></li>
+  <li><a href="#visualising-local-correlation-using-spearman-rho" id="toc-visualising-local-correlation-using-spearman-rho" class="nav-link" data-scroll-target="#visualising-local-correlation-using-spearman-rho">5.3 Visualising Local Correlation using Spearman Rho</a></li>
   </ul></li>
   </ul>
 </nav>
@@ -252,7 +253,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <div>
     <div class="quarto-title-meta-heading">Modified</div>
     <div class="quarto-title-meta-contents">
-      <p class="date-modified">September 16, 2024</p>
+      <p class="date-modified">September 19, 2024</p>
     </div>
   </div>
     
@@ -592,16 +593,84 @@ $ geometry   &lt;POLYGON [°]&gt; POLYGON ((112.0625 29.75523..., POLYGON ((112.
 <p><strong>Business question:</strong> Is there any relationship between GDP per capita and Gross Industry Output?</p>
 <section id="conventional-statistical-solution" class="level2">
 <h2 class="anchored" data-anchor-id="conventional-statistical-solution">5.1 Conventional Statistical Solution</h2>
+<p>The conventional approach to correlation involves calculating the relationship between two variables without considering geographic factors. While useful, this method is limited because it doesn’t reveal how the correlation varies across a region or how it may be influenced by neighboring areas.</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb31"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="fu">ggscatterstats</span>(</span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> hunan2012, </span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">x =</span> Agri, </span>
+<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">y =</span> GDPPC,</span>
+<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">xlab =</span> <span class="st">"Gross Agriculture Output"</span>, <span class="do">## label for the x-axis</span></span>
+<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">ylab =</span> <span class="st">"GDP per capita"</span>, </span>
+<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">label.var =</span> County, </span>
+<span id="cb31-8"><a href="#cb31-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">label.expression =</span> Agri <span class="sc">&gt;</span> <span class="dv">10000</span> <span class="sc">&amp;</span> GDPPC <span class="sc">&gt;</span> <span class="dv">50000</span>, </span>
+<span id="cb31-9"><a href="#cb31-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">point.label.args =</span> <span class="fu">list</span>(<span class="at">alpha =</span> <span class="fl">0.7</span>, <span class="at">size =</span> <span class="dv">4</span>, <span class="at">color =</span> <span class="st">"grey50"</span>),</span>
+<span id="cb31-10"><a href="#cb31-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">xfill =</span> <span class="st">"#CC79A7"</span>, </span>
+<span id="cb31-11"><a href="#cb31-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">yfill =</span> <span class="st">"#009E73"</span>, </span>
+<span id="cb31-12"><a href="#cb31-12" aria-hidden="true" tabindex="-1"></a>  <span class="at">title =</span> <span class="st">"Relationship between GDP PC and Gross Agriculture Output"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="In-class_Ex04_files/figure-html/unnamed-chunk-18-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
 </section>
 <section id="geospatial-analytical-solution" class="level2">
 <h2 class="anchored" data-anchor-id="geospatial-analytical-solution">5.2 Geospatial Analytical Solution</h2>
+<p>A geospatial approach, such as geographically weighted correlation (GWC), adds deeper insights by accounting for spatial variability. To perform GWC, we first determine the appropriate bandwidth, then compute the geographically weighted correlation, and finally append the results to the <code>hunan_sf</code> data frame.</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb31"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="co"># gwstats &lt;- gwss(data = hunan_sp,</span></span>
-<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a><span class="co">#                vars = c("GDPPC", "GIO"),</span></span>
-<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a><span class="co">#                bw = bw,</span></span>
-<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a><span class="co">#                kernel = "bisquare",</span></span>
-<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a><span class="co">#                adaptive = TRUE,</span></span>
-<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a><span class="co">#                longlat = TRUE)</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb32"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 1: Determining the bandwidth</span></span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a>bw <span class="ot">&lt;-</span> <span class="fu">bw.gwr</span>(GDPPC <span class="sc">~</span> GIO, </span>
+<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a>             <span class="at">data =</span> hunan_sp, </span>
+<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a>             <span class="at">approach =</span> <span class="st">"AICc"</span>, </span>
+<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a>             <span class="at">adaptive =</span> <span class="cn">TRUE</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Adaptive bandwidth (number of nearest neighbours): 62 AICc value: 1870.235 
+Adaptive bandwidth (number of nearest neighbours): 46 AICc value: 1870.852 
+Adaptive bandwidth (number of nearest neighbours): 72 AICc value: 1869.744 
+Adaptive bandwidth (number of nearest neighbours): 78 AICc value: 1869.713 
+Adaptive bandwidth (number of nearest neighbours): 82 AICc value: 1869.604 
+Adaptive bandwidth (number of nearest neighbours): 84 AICc value: 1869.537 
+Adaptive bandwidth (number of nearest neighbours): 86 AICc value: 1869.647 
+Adaptive bandwidth (number of nearest neighbours): 83 AICc value: 1869.567 
+Adaptive bandwidth (number of nearest neighbours): 84 AICc value: 1869.537 </code></pre>
+</div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb34"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 2: Computing the geographical weighted correlation</span></span>
+<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a>gwstats <span class="ot">&lt;-</span> <span class="fu">gwss</span>(<span class="at">data =</span> hunan_sp,</span>
+<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a>               <span class="at">vars =</span> <span class="fu">c</span>(<span class="st">"GDPPC"</span>, <span class="st">"GIO"</span>),</span>
+<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a>               <span class="at">bw =</span> bw,</span>
+<span id="cb34-5"><a href="#cb34-5" aria-hidden="true" tabindex="-1"></a>               <span class="at">kernel =</span> <span class="st">"bisquare"</span>,</span>
+<span id="cb34-6"><a href="#cb34-6" aria-hidden="true" tabindex="-1"></a>               <span class="at">adaptive =</span> <span class="cn">TRUE</span>,</span>
+<span id="cb34-7"><a href="#cb34-7" aria-hidden="true" tabindex="-1"></a>               <span class="at">longlat =</span> <span class="cn">TRUE</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb35"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 3: Extracting SDF data table from gwss output, and appending the results</span></span>
+<span id="cb35-2"><a href="#cb35-2" aria-hidden="true" tabindex="-1"></a>gwstat_df <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(gwstats<span class="sc">$</span>SDF) <span class="sc">%&gt;%</span></span>
+<span id="cb35-3"><a href="#cb35-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(<span class="fu">c</span>(<span class="dv">12</span>,<span class="dv">13</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb35-4"><a href="#cb35-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename</span>(<span class="at">gwCorr =</span> Corr_GDPPC.GIO,</span>
+<span id="cb35-5"><a href="#cb35-5" aria-hidden="true" tabindex="-1"></a>         <span class="at">gwSpearman =</span> Spearman_rho_GDPPC.GIO)</span>
+<span id="cb35-6"><a href="#cb35-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-7"><a href="#cb35-7" aria-hidden="true" tabindex="-1"></a>hunan_Corr <span class="ot">&lt;-</span> <span class="fu">cbind</span>(hunan_sf, gwstat_df)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="visualising-local-correlation-using-spearman-rho" class="level2">
+<h2 class="anchored" data-anchor-id="visualising-local-correlation-using-spearman-rho">5.3 Visualising Local Correlation using Spearman Rho</h2>
+<p>We use <strong>Spearman’s Rho</strong> because it is a non-parametric statistic, making it robust for handling non-linear relationships and ranked data.</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb36"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a><span class="fu">tm_shape</span>(hunan_Corr) <span class="sc">+</span></span>
+<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tm_fill</span>(<span class="st">"gwSpearman"</span>,</span>
+<span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a>          <span class="at">n =</span> <span class="dv">5</span>,</span>
+<span id="cb36-4"><a href="#cb36-4" aria-hidden="true" tabindex="-1"></a>          <span class="at">style =</span> <span class="st">"quantile"</span>) <span class="sc">+</span></span>
+<span id="cb36-5"><a href="#cb36-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tm_borders</span>(<span class="at">alpha =</span> <span class="fl">0.5</span>) <span class="sc">+</span></span>
+<span id="cb36-6"><a href="#cb36-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tm_layout</span>(<span class="at">main.title =</span> <span class="st">"Local Spearman Rho"</span>,</span>
+<span id="cb36-7"><a href="#cb36-7" aria-hidden="true" tabindex="-1"></a>            <span class="at">main.title.position =</span> <span class="st">"center"</span>,</span>
+<span id="cb36-8"><a href="#cb36-8" aria-hidden="true" tabindex="-1"></a>            <span class="at">main.title.size =</span> <span class="fl">1.0</span>,</span>
+<span id="cb36-9"><a href="#cb36-9" aria-hidden="true" tabindex="-1"></a>            <span class="at">legend.text.size =</span> <span class="fl">0.6</span>,</span>
+<span id="cb36-10"><a href="#cb36-10" aria-hidden="true" tabindex="-1"></a>            <span class="at">legend.height =</span> <span class="fl">0.6</span>, </span>
+<span id="cb36-11"><a href="#cb36-11" aria-hidden="true" tabindex="-1"></a>            <span class="at">legend.width =</span> <span class="fl">0.6</span>,</span>
+<span id="cb36-12"><a href="#cb36-12" aria-hidden="true" tabindex="-1"></a>            <span class="at">frame =</span> <span class="cn">TRUE</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="In-class_Ex04_files/figure-html/unnamed-chunk-22-1.png" class="img-fluid" width="672"></p>
+</div>
 </div>
 
 
