@@ -1,0 +1,189 @@
+---
+title: "Hands-on Ex 5A"
+subtitle: "Global Measures of Spatial Autocorrelation"
+author: "Stephen Tay"
+date: "23 Sep 2024"
+date-modified:  "last-modified"
+execute: 
+  eval: true
+  echo: true
+  message: false
+  freeze: true 
+---
+
+# 1. Overview
+This exercise introduces methods for computing Global Measures of Spatial Autocorrelation (GMSA).
+
+A key R package for computing GMSA is the `spdep` package.
+
+```{r}
+pacman::p_load(sf, spdep, tmap, tidyverse)
+```
+
+# 2. Importing & Transforming Data
+Two datasets will be used in this hands-on exercise:
+
+- **Hunan County Boundary Layer**: A geospatial dataset in ESRI shapefile format.
+- **Hunan_2012.csv**: A CSV file containing selected local development indicators for Hunan in 2012.
+
+::: panel-tabset
+## Hunan shapefile
+```{r}
+hunan <- st_read(dsn = "data/geospatial", 
+                 layer = "Hunan") 
+# crs = 4549 if need to convert
+```
+
+## Hunan 2012 development indicators
+```{r}
+hunan2012 <- read_csv("data/aspatial/Hunan_2012.csv")
+glimpse(hunan2012)
+```
+
+## Combining datasets
+The **GDP per Capita (GDPCC)** from `hunan2012` is needed to be added into hunan's sf dataframe. The datasets are joined by **County**.
+```{r}
+hunan <- left_join(hunan, hunan2012, by = "County") %>%
+  select(1:4, 7, 15)
+glimpse(hunan)
+```
+:::
+
+# 3. Geovisualisation & Choropleth Map
+A basemap and a choropleth map displaying GDP per capita are plotted.
+```{r}
+equal <- tm_shape(hunan) +
+  tm_fill("GDPPC",
+          n = 5,
+          style = "equal") +
+  tm_borders(alpha = 0.5) +
+  tm_layout(main.title = "Equal interval classification")
+
+quantile <- tm_shape(hunan) +
+  tm_fill("GDPPC",
+          n = 5,
+          style = "quantile") +
+  tm_borders(alpha = 0.5) +
+  tm_layout(main.title = "Equal quantile classification")
+
+tmap_arrange(equal, 
+             quantile, 
+             asp=1, 
+             ncol=2)
+```
+
+# 4. Global Measures of Spatial Autocorrelation
+
+```{r}
+wm_q <- poly2nb(hunan, 
+                queen=TRUE)
+summary(wm_q)
+```
+9.4.2
+```{r}
+rswm_q <- nb2listw(wm_q, 
+                   style="W", 
+                   zero.policy = TRUE)
+rswm_q
+```
+
+9.5.1
+```{r}
+moran.test(hunan$GDPPC, 
+           listw=rswm_q, 
+           zero.policy = TRUE, 
+           na.action=na.omit)
+```
+
+9.5.2
+```{r}
+set.seed(1234)
+bperm= moran.mc(hunan$GDPPC, 
+                listw=rswm_q, 
+                nsim=999, 
+                zero.policy = TRUE, 
+                na.action=na.omit)
+bperm
+```
+
+9.5.3
+```{r}
+mean(bperm$res[1:999])
+```
+
+```{r}
+var(bperm$res[1:999])
+```
+
+```{r}
+summary(bperm$res[1:999])
+```
+
+```{r}
+hist(bperm$res, 
+     freq=TRUE, 
+     breaks=20, 
+     xlab="Simulated Moran's I")
+abline(v=0, 
+       col="red") 
+```
+
+9.6.1
+```{r}
+geary.test(hunan$GDPPC, listw=rswm_q)
+```
+
+9.6.2
+```{r}
+set.seed(1234)
+bperm=geary.mc(hunan$GDPPC, 
+               listw=rswm_q, 
+               nsim=999)
+bperm
+```
+
+9.6.3
+```{r}
+mean(bperm$res[1:999])
+```
+
+```{r}
+var(bperm$res[1:999])
+```
+
+```{r}
+summary(bperm$res[1:999])
+```
+
+```{r}
+hist(bperm$res, freq=TRUE, breaks=20, xlab="Simulated Geary c")
+abline(v=1, col="red") 
+```
+
+9.7.1
+```{r}
+MI_corr <- sp.correlogram(wm_q, 
+                          hunan$GDPPC, 
+                          order=6, 
+                          method="I", 
+                          style="W")
+plot(MI_corr)
+```
+
+```{r}
+print(MI_corr)
+```
+
+9.7.2
+```{r}
+GC_corr <- sp.correlogram(wm_q, 
+                          hunan$GDPPC, 
+                          order=6, 
+                          method="C", 
+                          style="W")
+plot(GC_corr)
+```
+
+```{r}
+print(GC_corr)
+```
