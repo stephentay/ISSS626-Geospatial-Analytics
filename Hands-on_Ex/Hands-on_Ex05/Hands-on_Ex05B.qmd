@@ -179,7 +179,13 @@ tmap_arrange(localMI.map, pvalue.map, asp=1, ncol=2)
 :::
 
 # 6. LISA Cluster Map
+The LISA Cluster Map displays significant locations, color-coded by the type of spatial autocorrelation. Before generating the LISA cluster map, the first step is to plot the Moran scatterplot.
 
+::: panel-tabset
+## 1. Moran scatterplot
+The Moran scatterplot illustrates the relationship between the values of a chosen attribute at each location and the average value of that attribute in neighboring locations.
+
+The Moran scatterplot is divided into four quadrants. The top-right quadrant represents areas with high GDPPC, surrounded by other areas with similarly high GDPPC. These are the “high-high” locations 
 ```{r}
 nci <- moran.plot(hunan$GDPPC, rswm_q,
                   labels=as.character(hunan$County), 
@@ -187,10 +193,11 @@ nci <- moran.plot(hunan$GDPPC, rswm_q,
                   ylab="Spatially Lag GDPPC 2012")
 ```
 
-10.5.2
+## 2. Moran scatterplot with standardised variable
+First, we use the `scale()` function to center and scale the variable. Centering is done by subtracting the mean (excluding NAs) from each value, and scaling is achieved by dividing the centered values by their standard deviations.
 ```{r}
 hunan$Z.GDPPC <- scale(hunan$GDPPC) %>% 
-  as.vector 
+  as.vector()
 ```
 
 ```{r}
@@ -200,39 +207,14 @@ nci2 <- moran.plot(hunan$Z.GDPPC, rswm_q,
                    ylab="Spatially Lag z-GDPPC 2012")
 ```
 
-10.5.3
-```{r}
-quadrant <- vector(mode="numeric",length=nrow(localMI))
-```
+## 3. Prepare LISA map classes
+The following steps are performed before plotting the LISA cluster map:
 
-
-```{r}
-hunan$lag_GDPPC <- lag.listw(rswm_q, hunan$GDPPC)
-DV <- hunan$lag_GDPPC - mean(hunan$lag_GDPPC)
-```
-
-
-```{r}
-LM_I <- localMI[,1] - mean(localMI[,1])
-```
-
-
-```{r}
-signif <- 0.05
-```
-
-```{r}
-quadrant[DV <0 & LM_I>0] <- 1
-quadrant[DV >0 & LM_I<0] <- 2
-quadrant[DV <0 & LM_I<0] <- 3
-quadrant[DV >0 & LM_I>0] <- 4
-```
-
-
-```{r}
-quadrant[localMI[,5]>signif] <- 0
-```
-
+- Derive the spatially lagged variable of interest (GDPPC) and center it around its mean.
+- Center the local Moran’s I values around their mean.
+- Set a statistical significance level for the local Moran’s I at 0.05.
+- Define the categories: low-low (1), low-high (2), high-low (3), and high-high (4).
+- Finally, assign non-significant Moran’s I values to category 0.
 
 ```{r}
 quadrant <- vector(mode="numeric",length=nrow(localMI))
@@ -247,7 +229,8 @@ quadrant[DV >0 & LM_I>0] <- 4
 quadrant[localMI[,5]>signif] <- 0
 ```
 
-10.5.4
+## 4. Plot LISA map
+We plot the LISA map as follows:
 ```{r}
 hunan.localMI$quadrant <- quadrant
 colors <- c("#ffffff", "#2c7bb6", "#abd9e9", "#fdae61", "#d7191c")
@@ -263,6 +246,14 @@ tm_shape(hunan.localMI) +
   tm_borders(alpha=0.5)
 ```
 
+## 5. Plot both Moran's I and LISA map
+For effective interpretation, it’s best to display both GDPCC values map and the corresponding LISA cluster map side by side.
+
+Here's the observations of the LISA map:
+- **Red Areas (High-High Clusters):** These are areas with high GDPPC values surrounded by other areas with similarly high GDPPC. In the northeastern part of the region, you can see the high-GDPPC cluster that aligns with the darker orange areas in the GDPPC map.
+- **Blue Areas (Low-Low Clusters):** These represent areas with low GDPPC surrounded by similarly low GDPPC values. In this case, the cluster to the west is consistent with the lighter-colored areas (lower GDPPC) on the GDPPC map.
+- **Light Blue Areas (Low-High Outliers):** These areas have low GDPPC but are surrounded by areas with higher GDPPC values. This signifies outlier behavior where local GDPPC is lower than expected compared to its neighbors.
+- **White Areas (Insignificant):** These areas are not statistically significant in terms of spatial autocorrelation, meaning there is no strong clustering pattern.
 
 ```{r}
 gdppc <- qtm(hunan, "GDPPC")
@@ -283,18 +274,27 @@ LISAmap <- tm_shape(hunan.localMI) +
 tmap_arrange(gdppc, LISAmap, 
              asp=1, ncol=2)
 ```
+## 6. Key takeaways
+**Key takeaways:**
+- **High-High Cluster (Northeast):** The high GDPPC area in the northeast is a clear high-high cluster, which means this area has high economic performance relative to surrounding areas, and this pattern is statistically significant.
+- **Low-Low Cluster (West):** The low GDPPC areas in the west are part of a low-low cluster, indicating a region where GDPPC values are consistently low in relation to their neighbors.
+- **Outliers:** The low-high outlier (light blue) suggests an area that underperforms in GDPPC relative to surrounding areas, which might warrant further investigation for potential disparities.
+:::
 
-10.6.2
+# 7. Hot Spot and Cold Spot Area Analysis
+In addition to detecting clusters and outliers, localized spatial statistics can also be used to identify hot spots and cold spots.
+
+The term “hot spot” is commonly used across various disciplines to describe a region with values significantly higher than those of its surroundings.
+
+::: panel-tabset
+## 1. Derive the centroid
 ```{r}
 longitude <- map_dbl(hunan$geometry, ~st_centroid(.x)[[1]])
 latitude <- map_dbl(hunan$geometry, ~st_centroid(.x)[[2]])
-```
-
-```{r}
 coords <- cbind(longitude, latitude)
 ```
 
-10.6.2.2
+## 2. Determine the cut-off distance
 ```{r}
 #coords <- coordinates(hunan)
 k1 <- knn2nb(knearneigh(coords))
@@ -302,7 +302,7 @@ k1dists <- unlist(nbdists(k1, coords, longlat = TRUE))
 summary(k1dists)
 ```
 
-
+## 3. Compute fixed distance weight matrix
 ```{r}
 wm_d62 <- dnearneigh(coords, 0, 62, longlat = TRUE)
 wm_d62
@@ -313,7 +313,7 @@ wm62_lw <- nb2listw(wm_d62, style = 'B')
 summary(wm62_lw)
 ```
 
-10.6.3
+## 4. Compute adaptive distance weight matrix
 ```{r}
 knn <- knn2nb(knearneigh(coords, k=8))
 knn
@@ -324,8 +324,12 @@ knn
 knn_lw <- nb2listw(knn, style = 'B')
 summary(knn_lw)
 ```
+:::
 
-10.7.1
+# 8. Compute Gi Statistics
+
+::: panel-tabset
+## 1. Gi statistics using fixed distance
 ```{r}
 fips <- order(hunan$County)
 gi.fixed <- localG(hunan$GDPPC, wm62_lw)
@@ -338,7 +342,7 @@ hunan.gi <- cbind(hunan, as.matrix(gi.fixed)) %>%
   rename(gstat_fixed = as.matrix.gi.fixed.)
 ```
 
-10.7.2
+## 2. Map Gi values with fixed distance weights
 ```{r}
 gdppc <- qtm(hunan, "GDPPC")
 
@@ -352,7 +356,7 @@ Gimap <-tm_shape(hunan.gi) +
 tmap_arrange(gdppc, Gimap, asp=1, ncol=2)
 ```
 
-10.7.3
+## 3. Gi statistics using adaptive distance
 ```{r}
 fips <- order(hunan$County)
 gi.adaptive <- localG(hunan$GDPPC, knn_lw)
@@ -360,7 +364,7 @@ hunan.gi <- cbind(hunan, as.matrix(gi.adaptive)) %>%
   rename(gstat_adaptive = as.matrix.gi.adaptive.)
 ```
 
-
+## 4. Map Gi values with adaptive distance weights
 ```{r}
 gdppc<- qtm(hunan, "GDPPC")
 
@@ -377,3 +381,4 @@ tmap_arrange(gdppc,
              ncol=2)
 ```
 
+:::
