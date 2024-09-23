@@ -225,11 +225,9 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#overview" id="toc-overview" class="nav-link active" data-scroll-target="#overview">1. Overview</a></li>
   <li><a href="#importing-transforming-data" id="toc-importing-transforming-data" class="nav-link" data-scroll-target="#importing-transforming-data">2. Importing &amp; Transforming Data</a></li>
   <li><a href="#geovisualisation-choropleth-map" id="toc-geovisualisation-choropleth-map" class="nav-link" data-scroll-target="#geovisualisation-choropleth-map">3. Geovisualisation &amp; Choropleth Map</a></li>
-  <li><a href="#preparing-for-local-indicators-of-spatial-association-lisa" id="toc-preparing-for-local-indicators-of-spatial-association-lisa" class="nav-link" data-scroll-target="#preparing-for-local-indicators-of-spatial-association-lisa">4. Preparing for Local Indicators of Spatial Association (LISA)</a>
-  <ul class="collapse">
-  <li><a href="#compute-row-standardised-weights-matrix" id="toc-compute-row-standardised-weights-matrix" class="nav-link" data-scroll-target="#compute-row-standardised-weights-matrix">2. Compute row-standardised weights matrix</a></li>
-  </ul></li>
+  <li><a href="#preparing-for-local-indicators-of-spatial-association-lisa" id="toc-preparing-for-local-indicators-of-spatial-association-lisa" class="nav-link" data-scroll-target="#preparing-for-local-indicators-of-spatial-association-lisa">4. Preparing for Local Indicators of Spatial Association (LISA)</a></li>
   <li><a href="#local-morans-i" id="toc-local-morans-i" class="nav-link" data-scroll-target="#local-morans-i">5. Local Moran’s I</a></li>
+  <li><a href="#lisa-cluster-map" id="toc-lisa-cluster-map" class="nav-link" data-scroll-target="#lisa-cluster-map">6. LISA Cluster Map</a></li>
   </ul>
 </nav>
     </div>
@@ -410,7 +408,11 @@ $ geometry  &lt;POLYGON [°]&gt; POLYGON ((112.0625 29.75523..., POLYGON ((112.2
 <section id="preparing-for-local-indicators-of-spatial-association-lisa" class="level1">
 <h1>4. Preparing for Local Indicators of Spatial Association (LISA)</h1>
 <p>Before we can compute local spatial autocorrelation statistics, we need to perform the following steps:</p>
-<p>::: panel-tabset ## 1. Compute contiguity spatial weights The following computes the Queen contiguity weight matrix.</p>
+<div class="tabset-margin-container"></div><div class="panel-tabset">
+<ul class="nav nav-tabs" role="tablist"><li class="nav-item" role="presentation"><a class="nav-link active" id="tabset-2-1-tab" data-bs-toggle="tab" data-bs-target="#tabset-2-1" role="tab" aria-controls="tabset-2-1" aria-selected="true">1. Compute contiguity spatial weights</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-2-2-tab" data-bs-toggle="tab" data-bs-target="#tabset-2-2" role="tab" aria-controls="tabset-2-2" aria-selected="false">2. Compute row-standardised weights matrix</a></li></ul>
+<div class="tab-content">
+<div id="tabset-2-1" class="tab-pane active" role="tabpanel" aria-labelledby="tabset-2-1-tab">
+<p>The following computes the Queen contiguity weight matrix.</p>
 <p>The summary report indicates that there are 88 area units in Hunan. The most connected unit has 11 neighboring units, while two units have only one neighbor each.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>wm_q <span class="ot">&lt;-</span> <span class="fu">poly2nb</span>(hunan, </span>
@@ -432,8 +434,8 @@ Link number distribution:
 85 with 11 links</code></pre>
 </div>
 </div>
-<section id="compute-row-standardised-weights-matrix" class="level2">
-<h2 class="anchored" data-anchor-id="compute-row-standardised-weights-matrix">2. Compute row-standardised weights matrix</h2>
+</div>
+<div id="tabset-2-2" class="tab-pane" role="tabpanel" aria-labelledby="tabset-2-2-tab">
 <p>Next, we need to assign weights to each neighboring polygon. In this case, we will use equal weights (style = “W”), meaning each neighbor receives a weight of 1/(no. of neighbors). These weights are then used to calculate the weighted sum of income values from neighboring counties. While this method is straightforward and intuitive, it has a limitation: polygons on the edges of the study area may have fewer neighbors, which can lead to over- or under-estimation of spatial autocorrelation. For simplicity, we’ll use the “W” option here, but it’s worth noting that more robust alternatives, such as style = “B”, are available.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>rswm_q <span class="ot">&lt;-</span> <span class="fu">nb2listw</span>(wm_q, </span>
@@ -454,10 +456,16 @@ Weights constants summary:
 W 88 7744 88 37.86334 365.9147</code></pre>
 </div>
 </div>
-</section>
+</div>
+</div>
+</div>
 </section>
 <section id="local-morans-i" class="level1">
 <h1>5. Local Moran’s I</h1>
+<div class="tabset-margin-container"></div><div class="panel-tabset">
+<ul class="nav nav-tabs" role="tablist"><li class="nav-item" role="presentation"><a class="nav-link active" id="tabset-3-1-tab" data-bs-toggle="tab" data-bs-target="#tabset-3-1" role="tab" aria-controls="tabset-3-1" aria-selected="true">1. Compute local Moran’s I</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-3-2-tab" data-bs-toggle="tab" data-bs-target="#tabset-3-2" role="tab" aria-controls="tabset-3-2" aria-selected="false">2. Map local Moran’s I</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-3-3-tab" data-bs-toggle="tab" data-bs-target="#tabset-3-3" role="tab" aria-controls="tabset-3-3" aria-selected="false">3. Map local Moran’s I p-values</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-3-4-tab" data-bs-toggle="tab" data-bs-target="#tabset-3-4" role="tab" aria-controls="tabset-3-4" aria-selected="false">4. Mapping both local Moran’s I values and p-values</a></li></ul>
+<div class="tab-content">
+<div id="tabset-3-1" class="tab-pane active" role="tabpanel" aria-labelledby="tabset-3-1-tab">
 <p>The <code>localmoran()</code> function from the <code>spdep</code> package is used to compute local Moran’s I values, based on the given set of zi values and a listw object containing neighborhood weights.</p>
 <p>The code chunks below compute local Moran’s I for GDPPC2012 at the county level.</p>
 <div class="cell">
@@ -579,12 +587,14 @@ Zhuzhou        3.2864e-01 -5.2432e-04  7.2391e-03  3.8688e+00         0.0001
 Zixing        -7.6849e-01 -8.8210e-02  9.4057e-01 -7.0144e-01         0.4830</code></pre>
 </div>
 </div>
-<p>10.4.3.1</p>
+</div>
+<div id="tabset-3-2" class="tab-pane" role="tabpanel" aria-labelledby="tabset-3-2-tab">
+<p>We append the local Moran’s I dataframe (localMI) to the hunan <code>SpatialPolygonDataFrame</code>.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a>hunan.localMI <span class="ot">&lt;-</span> <span class="fu">cbind</span>(hunan,localMI) <span class="sc">%&gt;%</span></span>
 <span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename</span>(<span class="at">Pr.Ii =</span> Pr.z....E.Ii..)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
-<p>10.4.3.2</p>
+<p>The choropleth of local Moran’s I values can be plotted as follows:</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="fu">tm_shape</span>(hunan.localMI) <span class="sc">+</span></span>
 <span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tm_fill</span>(<span class="at">col =</span> <span class="st">"Ii"</span>, </span>
@@ -599,7 +609,10 @@ Zixing        -7.6849e-01 -8.8210e-02  9.4057e-01 -7.0144e-01         0.4830</co
 <p><img src="Hands-on_Ex05B_files/figure-html/unnamed-chunk-11-1.png" class="img-fluid" width="672"></p>
 </div>
 </div>
-<p>10.4.3.3</p>
+</div>
+<div id="tabset-3-3" class="tab-pane" role="tabpanel" aria-labelledby="tabset-3-3-tab">
+<p>The choropleth shows evidence of both positive and negative Ii values. However, it’s important to consider the p-values associated with these values, as mentioned above.</p>
+<p>The code chunks below generate a choropleth map of Moran’s I p-values using functions from the <code>tmap</code> package.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="fu">tm_shape</span>(hunan.localMI) <span class="sc">+</span></span>
 <span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tm_fill</span>(<span class="at">col =</span> <span class="st">"Pr.Ii"</span>, </span>
@@ -611,7 +624,9 @@ Zixing        -7.6849e-01 -8.8210e-02  9.4057e-01 -7.0144e-01         0.4830</co
 <p><img src="Hands-on_Ex05B_files/figure-html/unnamed-chunk-12-1.png" class="img-fluid" width="672"></p>
 </div>
 </div>
-<p>10.4.3.4</p>
+</div>
+<div id="tabset-3-4" class="tab-pane" role="tabpanel" aria-labelledby="tabset-3-4-tab">
+<p>For effective interpretation, it’s best to display both the local Moran’s I values map and the corresponding p-values map side by side.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb24"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a>localMI.map <span class="ot">&lt;-</span> <span class="fu">tm_shape</span>(hunan.localMI) <span class="sc">+</span></span>
 <span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tm_fill</span>(<span class="at">col =</span> <span class="st">"Ii"</span>, </span>
@@ -634,7 +649,12 @@ Zixing        -7.6849e-01 -8.8210e-02  9.4057e-01 -7.0144e-01         0.4830</co
 <p><img src="Hands-on_Ex05B_files/figure-html/unnamed-chunk-13-1.png" class="img-fluid" width="672"></p>
 </div>
 </div>
-<p>10.5.1</p>
+</div>
+</div>
+</div>
+</section>
+<section id="lisa-cluster-map" class="level1">
+<h1>6. LISA Cluster Map</h1>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb26"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a>nci <span class="ot">&lt;-</span> <span class="fu">moran.plot</span>(hunan<span class="sc">$</span>GDPPC, rswm_q,</span>
 <span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>                  <span class="at">labels=</span><span class="fu">as.character</span>(hunan<span class="sc">$</span>County), </span>

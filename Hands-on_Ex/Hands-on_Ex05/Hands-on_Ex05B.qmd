@@ -98,8 +98,12 @@ rswm_q <- nb2listw(wm_q,
                    zero.policy = TRUE)
 rswm_q
 ```
+:::
 
 # 5. Local Moran's I
+
+::: panel-tabset
+## 1. Compute local Moran's I
 The `localmoran()` function from the `spdep` package is used to compute local Moran’s I values, based on the given set of zi values and a listw object containing neighborhood weights.
 
 The code chunks below compute local Moran’s I for GDPPC2012 at the county level.
@@ -124,13 +128,14 @@ printCoefmat(data.frame(
   check.names=FALSE)
 ```
 
-10.4.3.1
+## 2. Map local Moran's I
+We append the local Moran’s I dataframe (localMI) to the hunan `SpatialPolygonDataFrame`.
 ```{r}
 hunan.localMI <- cbind(hunan,localMI) %>%
   rename(Pr.Ii = Pr.z....E.Ii..)
 ```
 
-10.4.3.2
+The choropleth of local Moran’s I values can be plotted as follows:
 ```{r}
 tm_shape(hunan.localMI) +
   tm_fill(col = "Ii", 
@@ -140,7 +145,10 @@ tm_shape(hunan.localMI) +
   tm_borders(alpha = 0.5)
 ```
 
-10.4.3.3
+## 3. Map local Moran’s I p-values
+The choropleth shows evidence of both positive and negative Ii values. However, it’s important to consider the p-values associated with these values, as mentioned above.
+
+The code chunks below generate a choropleth map of Moran’s I p-values using functions from the `tmap` package.
 ```{r}
 tm_shape(hunan.localMI) +
   tm_fill(col = "Pr.Ii", 
@@ -150,7 +158,8 @@ tm_shape(hunan.localMI) +
   tm_borders(alpha = 0.5)
 ```
 
-10.4.3.4
+## 4. Mapping both local Moran’s I values and p-values
+For effective interpretation, it’s best to display both the local Moran’s I values map and the corresponding p-values map side by side.
 ```{r}
 localMI.map <- tm_shape(hunan.localMI) +
   tm_fill(col = "Ii", 
@@ -167,8 +176,10 @@ pvalue.map <- tm_shape(hunan.localMI) +
 
 tmap_arrange(localMI.map, pvalue.map, asp=1, ncol=2)
 ```
+:::
 
-10.5.1
+# 6. LISA Cluster Map
+
 ```{r}
 nci <- moran.plot(hunan$GDPPC, rswm_q,
                   labels=as.character(hunan$County), 
