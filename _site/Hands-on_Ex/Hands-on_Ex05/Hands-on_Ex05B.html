@@ -225,7 +225,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#overview" id="toc-overview" class="nav-link active" data-scroll-target="#overview">1. Overview</a></li>
   <li><a href="#importing-transforming-data" id="toc-importing-transforming-data" class="nav-link" data-scroll-target="#importing-transforming-data">2. Importing &amp; Transforming Data</a></li>
   <li><a href="#geovisualisation-choropleth-map" id="toc-geovisualisation-choropleth-map" class="nav-link" data-scroll-target="#geovisualisation-choropleth-map">3. Geovisualisation &amp; Choropleth Map</a></li>
-  <li><a href="#local-indicators-of-spatial-association-lisa" id="toc-local-indicators-of-spatial-association-lisa" class="nav-link" data-scroll-target="#local-indicators-of-spatial-association-lisa">4. Local Indicators of Spatial Association (LISA)</a></li>
+  <li><a href="#preparing-for-local-indicators-of-spatial-association-lisa" id="toc-preparing-for-local-indicators-of-spatial-association-lisa" class="nav-link" data-scroll-target="#preparing-for-local-indicators-of-spatial-association-lisa">4. Preparing for Local Indicators of Spatial Association (LISA)</a>
+  <ul class="collapse">
+  <li><a href="#compute-row-standardised-weights-matrix" id="toc-compute-row-standardised-weights-matrix" class="nav-link" data-scroll-target="#compute-row-standardised-weights-matrix">2. Compute row-standardised weights matrix</a></li>
+  </ul></li>
+  <li><a href="#local-morans-i" id="toc-local-morans-i" class="nav-link" data-scroll-target="#local-morans-i">5. Local Moran’s I</a></li>
   </ul>
 </nav>
     </div>
@@ -270,8 +274,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <section id="overview" class="level1">
 <h1>1. Overview</h1>
-<p>This exercise introduces methods for computing Local Measures of Spatial Autocorrelation (LMSA).</p>
-<p>A key R package for computing GMSA is the <code>spdep</code> package.</p>
+<p>This exercise introduces <strong>Local Measures of Spatial Autocorrelation (LMSA)</strong>, which are tools used to examine how observations in a dataset relate to their nearby surroundings. Unlike global measures, which summarize patterns across an entire map, LMSA provides a more detailed look by calculating scores for individual locations, helping us understand local spatial structures and variations.</p>
+<p>The key idea behind LMSA is similar to global spatial autocorrelation, where we assess how similar or dissimilar values are when compared with their neighbors. In some cases, the global measures can even be broken down into a set of local measures, allowing for a more granular analysis. For example, Local Indicators of Spatial Association (LISA) are a type of LMSA that decomposes global spatial patterns into local components, showing where clusters of similar or dissimilar values occur.</p>
+<p>Additionally, we’ll explore Getis-Ord’s Gi* statistics as another LMSA method. This provides complementary information, helping us identify hot and cold spots of geographically referenced data, further enriching our understanding of spatial relationships.</p>
+<p>A key R package for LMSA analysis is the <code>spdep</code> package.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>pacman<span class="sc">::</span><span class="fu">p_load</span>(sf, spdep, tmap, tidyverse)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
@@ -401,8 +407,11 @@ $ geometry  &lt;POLYGON [°]&gt; POLYGON ((112.0625 29.75523..., POLYGON ((112.2
 </div>
 </div>
 </section>
-<section id="local-indicators-of-spatial-association-lisa" class="level1">
-<h1>4. Local Indicators of Spatial Association (LISA)</h1>
+<section id="preparing-for-local-indicators-of-spatial-association-lisa" class="level1">
+<h1>4. Preparing for Local Indicators of Spatial Association (LISA)</h1>
+<p>Before we can compute local spatial autocorrelation statistics, we need to perform the following steps:</p>
+<p>::: panel-tabset ## 1. Compute contiguity spatial weights The following computes the Queen contiguity weight matrix.</p>
+<p>The summary report indicates that there are 88 area units in Hunan. The most connected unit has 11 neighboring units, while two units have only one neighbor each.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>wm_q <span class="ot">&lt;-</span> <span class="fu">poly2nb</span>(hunan, </span>
 <span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>                <span class="at">queen=</span><span class="cn">TRUE</span>)</span>
@@ -423,7 +432,9 @@ Link number distribution:
 85 with 11 links</code></pre>
 </div>
 </div>
-<p>10.4.2</p>
+<section id="compute-row-standardised-weights-matrix" class="level2">
+<h2 class="anchored" data-anchor-id="compute-row-standardised-weights-matrix">2. Compute row-standardised weights matrix</h2>
+<p>Next, we need to assign weights to each neighboring polygon. In this case, we will use equal weights (style = “W”), meaning each neighbor receives a weight of 1/(no. of neighbors). These weights are then used to calculate the weighted sum of income values from neighboring counties. While this method is straightforward and intuitive, it has a limitation: polygons on the edges of the study area may have fewer neighbors, which can lead to over- or under-estimation of spatial autocorrelation. For simplicity, we’ll use the “W” option here, but it’s worth noting that more robust alternatives, such as style = “B”, are available.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>rswm_q <span class="ot">&lt;-</span> <span class="fu">nb2listw</span>(wm_q, </span>
 <span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>                   <span class="at">style=</span><span class="st">"W"</span>, </span>
@@ -443,7 +454,12 @@ Weights constants summary:
 W 88 7744 88 37.86334 365.9147</code></pre>
 </div>
 </div>
-<p>10.4.3</p>
+</section>
+</section>
+<section id="local-morans-i" class="level1">
+<h1>5. Local Moran’s I</h1>
+<p>The <code>localmoran()</code> function from the <code>spdep</code> package is used to compute local Moran’s I values, based on the given set of zi values and a listw object containing neighborhood weights.</p>
+<p>The code chunks below compute local Moran’s I for GDPPC2012 at the county level.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>fips <span class="ot">&lt;-</span> <span class="fu">order</span>(hunan<span class="sc">$</span>County)</span>
 <span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>localMI <span class="ot">&lt;-</span> <span class="fu">localmoran</span>(hunan<span class="sc">$</span>GDPPC, rswm_q)</span>
@@ -458,6 +474,14 @@ W 88 7744 88 37.86334 365.9147</code></pre>
 6 -0.038793829 -3.860263e-04 6.475559e-03 -0.47728835      0.6331568</code></pre>
 </div>
 </div>
+<p>The code chunk below list the content of the local Moran matrix derived by using <code>printCoefmat()</code>. The columns are as follows:</p>
+<ul>
+<li>Ii: The local Moran’s I statistic.</li>
+<li>E.Ii: The expected value of the local Moran’s I under the randomization hypothesis.</li>
+<li>Var.Ii: The variance of the local Moran’s I under the randomization hypothesis.</li>
+<li>Z.Ii: The standardized value (z-score) of the local Moran’s I.</li>
+<li>Pr(): The p-value of the local Moran’s I, indicating the statistical significance.</li>
+</ul>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="fu">printCoefmat</span>(<span class="fu">data.frame</span>(</span>
 <span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>  localMI[fips,], </span>

@@ -76,15 +76,22 @@ tmap_arrange(equal,
              ncol=2)
 ```
 
-# 4. Local Indicators of Spatial Association (LISA)
+# 4. Preparing for Local Indicators of Spatial Association (LISA)
+Before we can compute local spatial autocorrelation statistics, we need to perform the following steps:
 
+::: panel-tabset
+## 1. Compute contiguity spatial weights
+The following computes the Queen contiguity weight matrix.
+
+The summary report indicates that there are 88 area units in Hunan. The most connected unit has 11 neighboring units, while two units have only one neighbor each.
 ```{r}
 wm_q <- poly2nb(hunan, 
                 queen=TRUE)
 summary(wm_q)
 ```
 
-10.4.2
+## 2. Compute row-standardised weights matrix
+Next, we need to assign weights to each neighboring polygon. In this case, we will use equal weights (style = “W”), meaning each neighbor receives a weight of 1/(no. of neighbors). These weights are then used to calculate the weighted sum of income values from neighboring counties. While this method is straightforward and intuitive, it has a limitation: polygons on the edges of the study area may have fewer neighbors, which can lead to over- or under-estimation of spatial autocorrelation. For simplicity, we’ll use the “W” option here, but it’s worth noting that more robust alternatives, such as style = “B”, are available.
 ```{r}
 rswm_q <- nb2listw(wm_q, 
                    style="W", 
@@ -92,13 +99,23 @@ rswm_q <- nb2listw(wm_q,
 rswm_q
 ```
 
-10.4.3
+# 5. Local Moran's I
+The `localmoran()` function from the `spdep` package is used to compute local Moran’s I values, based on the given set of zi values and a listw object containing neighborhood weights.
+
+The code chunks below compute local Moran’s I for GDPPC2012 at the county level.
 ```{r}
 fips <- order(hunan$County)
 localMI <- localmoran(hunan$GDPPC, rswm_q)
 head(localMI)
 ```
 
+The code chunk below list the content of the local Moran matrix derived by using `printCoefmat()`. The columns are as follows:
+
+- Ii: The local Moran’s I statistic.
+- E.Ii: The expected value of the local Moran’s I under the randomization hypothesis.
+- Var.Ii: The variance of the local Moran’s I under the randomization hypothesis.
+- Z.Ii: The standardized value (z-score) of the local Moran’s I.
+- Pr(): The p-value of the local Moran’s I, indicating the statistical significance.
 
 ```{r}
 printCoefmat(data.frame(
