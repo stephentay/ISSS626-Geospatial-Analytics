@@ -12,9 +12,13 @@ execute:
 ---
 
 # 1. Overview
-This exercise introduces methods for computing Global Measures of Spatial Autocorrelation (GMSA).
+This exercise introduces methods for computing **Global Measures of Spatial Autocorrelation (GMSA).** GMSA provides a summary of the overall spatial patterns within a dataset, showing whether similar values cluster together or if there is a random distribution across the entire map.
 
-A key R package for computing GMSA is the `spdep` package.
+Spatial autocorrelation measures how one location’s data is related to nearby locations. With global measures, we look at the entire dataset as a whole, asking questions like: Are similar values (high or low) generally located near each other? Or are values spread out randomly? GMSA gives us a single statistic that answers these questions, giving insight into the spatial structure of our data.
+
+One common example is Moran’s I, a widely used GMSA method. It provides a value that indicates whether there is clustering (positive autocorrelation), a dispersed pattern (negative autocorrelation), or no clear pattern (no autocorrelation). These global measures help us identify broad spatial trends, which we can later break down into more detailed local measures.
+
+A key R package for GMSA analysis is the `spdep` package.
 
 ```{r}
 pacman::p_load(sf, spdep, tmap, tidyverse)
@@ -50,7 +54,7 @@ glimpse(hunan)
 :::
 
 # 3. Geovisualisation & Choropleth Map
-A basemap and a choropleth map displaying GDP per capita are plotted.
+A basemap and a choropleth map showing the distribution of GDP per capita are plotted.
 ```{r}
 equal <- tm_shape(hunan) +
   tm_fill("GDPPC",
@@ -72,22 +76,37 @@ tmap_arrange(equal,
              ncol=2)
 ```
 
-# 4. Global Measures of Spatial Autocorrelation
+# 4. Preparing for Global Measures of Spatial Autocorrelation
+Before we can compute global spatial autocorrelation statistics, we need to perform the following steps:
 
+::: panel-tabset
+## 1. Compute contiguity spatial weights
+Spatial weights define the neighborhood relationships between geographical units (e.g., counties) in the study area. In the code chunk below, the `poly2nb()` function from the `spdep` package is used to compute contiguity-based weight matrices for the study area. This function creates a list of neighboring regions by identifying those that share common boundaries.
+The following computes the Queen contiguity weight matrix.
+
+The summary report indicates that there are 88 area units in Hunan. The most connected unit has 11 neighboring units, while two units have only one neighbor each.
 ```{r}
 wm_q <- poly2nb(hunan, 
                 queen=TRUE)
 summary(wm_q)
 ```
-9.4.2
+## 2. Compute row-standardised weights matrix
+Next, we need to assign weights to each neighboring polygon. In this case, we will use equal weights (style = “W”), meaning each neighbor receives a weight of 1/(no. of neighbors). These weights are then used to calculate the weighted sum of income values from neighboring counties. While this method is straightforward and intuitive, it has a limitation: polygons on the edges of the study area may have fewer neighbors, which can lead to over- or under-estimation of spatial autocorrelation. For simplicity, we’ll use the “W” option here, but it’s worth noting that more robust alternatives, such as style = “B”, are available.
 ```{r}
 rswm_q <- nb2listw(wm_q, 
                    style="W", 
                    zero.policy = TRUE)
 rswm_q
 ```
+:::
 
-9.5.1
+# 5. GMSA: Moran’s I
+In this section, we will perform Moran's I statistical testing.
+
+::: panel-tabset
+## 1. Moran’s I test
+We conduct Moran’s I statistical test using the `moran.test()` function from the `spdep` package.
+From the results, Moran’s I is 0.30, which is greater than 0, indicating positive spatial autocorrelation. Since the p-value is less than .001, the result is statistically significant. This means that the observations are not randomly distributed but are spatially clustered, with similar values tending to be near each other.
 ```{r}
 moran.test(hunan$GDPPC, 
            listw=rswm_q, 
@@ -95,10 +114,15 @@ moran.test(hunan$GDPPC,
            na.action=na.omit)
 ```
 
-9.5.2
+## 2. Monte Carlo Moran’s I test
+The Monte Carlo Moran’s I test is used to assess the significance of spatial autocorrelation by comparing the observed Moran’s I to a distribution of Moran’s I values generated through random permutations. It helps determine whether the observed spatial pattern is significantly different from what could be expected under randomness.
+
+A permutation test for Moran’s I statistic conducted using `moran.mc()` function from the `spdep` package, with 1,000 simulations. This Monte Carlo approach generates a distribution of Moran’s I values by randomly shuffling the spatial data and recalculating Moran’s I for each simulation. It allows us to compare the observed Moran’s I against this randomized distribution to assess its significance.
+
+From the results, the observed Moran’s I statistic is 0.30, which is greater than 0, indicating positive spatial autocorrelation. Since the p-value is 0.001, the result is statistically significant. This means that the observed spatial pattern is unlikely to have occurred by chance; there is spatial clustering, where similar values tend to be located near each other.
 ```{r}
 set.seed(1234)
-bperm= moran.mc(hunan$GDPPC, 
+bperm = moran.mc(hunan$GDPPC, 
                 listw=rswm_q, 
                 nsim=999, 
                 zero.policy = TRUE, 
@@ -106,7 +130,8 @@ bperm= moran.mc(hunan$GDPPC,
 bperm
 ```
 
-9.5.3
+## 3. Visualising Monte Carlo Moran’s I
+It is good practice to examine the simulated Moran’s I test statistics in greater detail. This can be done by plotting the distribution of these values as a histogram.
 ```{r}
 mean(bperm$res[1:999])
 ```
@@ -120,29 +145,45 @@ summary(bperm$res[1:999])
 ```
 
 ```{r}
-hist(bperm$res, 
-     freq=TRUE, 
-     breaks=20, 
-     xlab="Simulated Moran's I")
-abline(v=0, 
-       col="red") 
-```
+data <- data.frame(simulated_I = bperm$res)
 
-9.6.1
+# Plot the histogram using ggplot2
+ggplot(data, aes(x = simulated_I)) +
+  geom_histogram(binwidth = diff(range(bperm$res))/20, fill="lightblue", color="black") +
+  geom_vline(xintercept = 0, color = "red", linetype = "dashed") +
+  geom_vline(xintercept = 0.30075, color = "purple") +
+  annotate("text", x = 0.30075, y = 100,
+           label = "Observed Moran's I", color = "purple", vjust = 0.5, hjust = 1.1) +
+  labs(x = "Simulated Moran's I", y = "Frequency", title = "Histogram of Simulated Moran's I") +
+  theme_minimal()
+```
+:::
+
+# 6. GMSA: Geary's C
+In this section, we will perform Geary's C statistical testing.
+
+::: panel-tabset
+## 1. Geary's C test
+We conduct Geary's C statistical test using the `geary.test()` function from the `spdep` package.
+From the results, Geary’s C is 0.69, which is less than 1. This indicates positive spatial autocorrelation, meaning that neighboring areas tend to have similar values. Since the p-value is less than 0.001, the result is statistically significant, suggesting that the observed spatial pattern is unlikely due to random chance. Therefore, the data shows spatial clustering, where similar values tend to be located near each other.
 ```{r}
 geary.test(hunan$GDPPC, listw=rswm_q)
 ```
 
-9.6.2
+## 2. Monte Carlo Geary's C test
+A permutation test for Geary’s C statistic was conducted using the `geary.mc()` function from the `spdep` package, with 1,000 simulations. This Monte Carlo approach creates a distribution of Geary’s C values by randomly shuffling the spatial data and recalculating Geary’s C for each simulation. This allows us to compare the observed Geary’s C against the randomized distribution to assess the significance of the spatial autocorrelation.
+
+From the results, the observed Geary’s C statistic is 0.69, which is less than 1, indicating positive spatial autocorrelation. Since the p-value is 0.001, the result is statistically significant, meaning the observed spatial pattern is unlikely to have occurred by chance. Therefore, the data shows spatial clustering, where similar values are more likely to be found near each other.
 ```{r}
 set.seed(1234)
-bperm=geary.mc(hunan$GDPPC, 
+bperm = geary.mc(hunan$GDPPC, 
                listw=rswm_q, 
                nsim=999)
 bperm
 ```
 
-9.6.3
+## 3. Visualising Monte Carlo Geary's C
+Next, we plot a histogram to reveal the distribution of the simulated values.
 ```{r}
 mean(bperm$res[1:999])
 ```
@@ -156,11 +197,26 @@ summary(bperm$res[1:999])
 ```
 
 ```{r}
-hist(bperm$res, freq=TRUE, breaks=20, xlab="Simulated Geary c")
-abline(v=1, col="red") 
-```
+data <- data.frame(simulated_C = bperm$res)
 
-9.7.1
+# Plot the histogram using ggplot2
+ggplot(data, aes(x = simulated_C)) +
+  geom_histogram(binwidth = diff(range(bperm$res))/20, fill="lightblue", color="black") +
+  geom_vline(xintercept = 1, color = "red", linetype = "dashed") +
+  geom_vline(xintercept = 0.69072, color = "purple") +
+  annotate("text", x = 0.69072, y = 100,
+           label = "Observed Geary's C", color = "purple", vjust = 0.5, hjust = -0.1) +
+  labs(x = "Simulated Geary's C", y = "Frequency", title = "Histogram of Simulated Geary's C") +
+  theme_minimal()
+```
+:::
+
+# 7. Spatial Correlogram
+A **spatial correlogram** is a tool used to assess and visualize spatial autocorrelation against increasing distances (lags) between spatial observations. It plots a measure of spatial autocorrelation, such as Moran’s I or Geary’s C, against distance, allowing us to see how relationships between spatial observations change as the distance between them increases. Correlograms help identify how far spatial dependence extends and whether it weakens, strengthens, or fluctuates with distance.
+
+::: panel-tabset
+## 1. Moran’s I correlogram
+The `sp.correlogram()` function from the `spdep` package is used to compute a 6-lag spatial correlogram for GDP per capita (GDPPC), with Moran’s I as the measure of global spatial autocorrelation.
 ```{r}
 MI_corr <- sp.correlogram(wm_q, 
                           hunan$GDPPC, 
@@ -170,11 +226,17 @@ MI_corr <- sp.correlogram(wm_q,
 plot(MI_corr)
 ```
 
+Plotting the output alone may not provide a complete interpretation, as not all autocorrelation values are statistically significant. Therefore, it’s important to review the full analysis by printing the results, as shown in the code chunk below.
+
+The results reveal that:
+- **Spatial Clustering at Short Distances:** There is evidence of spatial clustering of similar GDP per capita values within shorter distances (lags 1-3). Neighboring areas are likely to have similar economic performance.
+-	**Diminishing Spatial Autocorrelation with Distance:** Beyond lag 3, spatial autocorrelation weakens and eventually becomes insignificant at larger distances. This suggests that the relationship between neighboring areas becomes weaker as the distance between them increases.
 ```{r}
 print(MI_corr)
 ```
 
-9.7.2
+## 2. Geary’s C correlogram
+In the code chunk below, the `sp.correlogram()` function from the `spdep` package is used to compute a 6-lag spatial correlogram for GDP per capita (GDPPC), using Geary’s C as the measure of global spatial autocorrelation.
 ```{r}
 GC_corr <- sp.correlogram(wm_q, 
                           hunan$GDPPC, 
@@ -183,6 +245,10 @@ GC_corr <- sp.correlogram(wm_q,
                           style="W")
 plot(GC_corr)
 ```
+
+The results reveal that:
+- **Spatial Clustering at Short Distances:** There is evidence of spatial clustering of similar GDP per capita values within shorter distances (lags 1-2). Neighboring areas are likely to have similar economic performance.
+-	**Diminishing Spatial Autocorrelation with Distance:** Beyond lag 2, spatial autocorrelation weakens and eventually becomes insignificant at larger distances. This suggests that the relationship between neighboring areas becomes weaker as the distance between them increases.
 
 ```{r}
 print(GC_corr)

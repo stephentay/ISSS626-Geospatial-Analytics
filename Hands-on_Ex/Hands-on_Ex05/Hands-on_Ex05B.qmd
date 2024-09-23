@@ -12,10 +12,13 @@ execute:
 ---
 
 # 1. Overview
-This exercise introduces methods for computing Local Measures of Spatial Autocorrelation (LMSA).
+This exercise introduces **Local Measures of Spatial Autocorrelation (LMSA)**, which are tools used to examine how observations in a dataset relate to their nearby surroundings. Unlike global measures, which summarize patterns across an entire map, LMSA provides a more detailed look by calculating scores for individual locations, helping us understand local spatial structures and variations.
 
-A key R package for computing GMSA is the `spdep` package.
+The key idea behind LMSA is similar to global spatial autocorrelation, where we assess how similar or dissimilar values are when compared with their neighbors. In some cases, the global measures can even be broken down into a set of local measures, allowing for a more granular analysis. For example, Local Indicators of Spatial Association (LISA) are a type of LMSA that decomposes global spatial patterns into local components, showing where clusters of similar or dissimilar values occur.
 
+Additionally, we’ll explore Getis-Ord’s Gi* statistics as another LMSA method. This provides complementary information, helping us identify hot and cold spots of geographically referenced data, further enriching our understanding of spatial relationships.
+
+A key R package for LMSA analysis is the `spdep` package.
 
 ```{r}
 pacman::p_load(sf, spdep, tmap, tidyverse)

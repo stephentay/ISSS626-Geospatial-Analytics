@@ -225,7 +225,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#overview" id="toc-overview" class="nav-link active" data-scroll-target="#overview">1. Overview</a></li>
   <li><a href="#importing-transforming-data" id="toc-importing-transforming-data" class="nav-link" data-scroll-target="#importing-transforming-data">2. Importing &amp; Transforming Data</a></li>
   <li><a href="#geovisualisation-choropleth-map" id="toc-geovisualisation-choropleth-map" class="nav-link" data-scroll-target="#geovisualisation-choropleth-map">3. Geovisualisation &amp; Choropleth Map</a></li>
-  <li><a href="#global-measures-of-spatial-autocorrelation" id="toc-global-measures-of-spatial-autocorrelation" class="nav-link" data-scroll-target="#global-measures-of-spatial-autocorrelation">4. Global Measures of Spatial Autocorrelation</a></li>
+  <li><a href="#preparing-for-global-measures-of-spatial-autocorrelation" id="toc-preparing-for-global-measures-of-spatial-autocorrelation" class="nav-link" data-scroll-target="#preparing-for-global-measures-of-spatial-autocorrelation">4. Preparing for Global Measures of Spatial Autocorrelation</a></li>
+  <li><a href="#gmsa-morans-i" id="toc-gmsa-morans-i" class="nav-link" data-scroll-target="#gmsa-morans-i">5. GMSA: Moran’s I</a></li>
+  <li><a href="#gmsa-gearys-c" id="toc-gmsa-gearys-c" class="nav-link" data-scroll-target="#gmsa-gearys-c">6. GMSA: Geary’s C</a></li>
+  <li><a href="#spatial-correlogram" id="toc-spatial-correlogram" class="nav-link" data-scroll-target="#spatial-correlogram">7. Spatial Correlogram</a>
+  <ul class="collapse">
+  <li><a href="#gearys-c-correlogram" id="toc-gearys-c-correlogram" class="nav-link" data-scroll-target="#gearys-c-correlogram">2. Geary’s C correlogram</a></li>
+  </ul></li>
   </ul>
 </nav>
     </div>
@@ -270,8 +276,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <section id="overview" class="level1">
 <h1>1. Overview</h1>
-<p>This exercise introduces methods for computing Global Measures of Spatial Autocorrelation (GMSA).</p>
-<p>A key R package for computing GMSA is the <code>spdep</code> package.</p>
+<p>This exercise introduces methods for computing <strong>Global Measures of Spatial Autocorrelation (GMSA).</strong> GMSA provides a summary of the overall spatial patterns within a dataset, showing whether similar values cluster together or if there is a random distribution across the entire map.</p>
+<p>Spatial autocorrelation measures how one location’s data is related to nearby locations. With global measures, we look at the entire dataset as a whole, asking questions like: Are similar values (high or low) generally located near each other? Or are values spread out randomly? GMSA gives us a single statistic that answers these questions, giving insight into the spatial structure of our data.</p>
+<p>One common example is Moran’s I, a widely used GMSA method. It provides a value that indicates whether there is clustering (positive autocorrelation), a dispersed pattern (negative autocorrelation), or no clear pattern (no autocorrelation). These global measures help us identify broad spatial trends, which we can later break down into more detailed local measures.</p>
+<p>A key R package for GMSA analysis is the <code>spdep</code> package.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>pacman<span class="sc">::</span><span class="fu">p_load</span>(sf, spdep, tmap, tidyverse)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
@@ -376,7 +384,7 @@ $ geometry  &lt;POLYGON [°]&gt; POLYGON ((112.0625 29.75523..., POLYGON ((112.2
 </section>
 <section id="geovisualisation-choropleth-map" class="level1">
 <h1>3. Geovisualisation &amp; Choropleth Map</h1>
-<p>A basemap and a choropleth map displaying GDP per capita are plotted.</p>
+<p>A basemap and a choropleth map showing the distribution of GDP per capita are plotted.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>equal <span class="ot">&lt;-</span> <span class="fu">tm_shape</span>(hunan) <span class="sc">+</span></span>
 <span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tm_fill</span>(<span class="st">"GDPPC"</span>,</span>
@@ -401,8 +409,15 @@ $ geometry  &lt;POLYGON [°]&gt; POLYGON ((112.0625 29.75523..., POLYGON ((112.2
 </div>
 </div>
 </section>
-<section id="global-measures-of-spatial-autocorrelation" class="level1">
-<h1>4. Global Measures of Spatial Autocorrelation</h1>
+<section id="preparing-for-global-measures-of-spatial-autocorrelation" class="level1">
+<h1>4. Preparing for Global Measures of Spatial Autocorrelation</h1>
+<p>Before we can compute global spatial autocorrelation statistics, we need to perform the following steps:</p>
+<div class="tabset-margin-container"></div><div class="panel-tabset">
+<ul class="nav nav-tabs" role="tablist"><li class="nav-item" role="presentation"><a class="nav-link active" id="tabset-2-1-tab" data-bs-toggle="tab" data-bs-target="#tabset-2-1" role="tab" aria-controls="tabset-2-1" aria-selected="true">1. Compute contiguity spatial weights</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-2-2-tab" data-bs-toggle="tab" data-bs-target="#tabset-2-2" role="tab" aria-controls="tabset-2-2" aria-selected="false">2. Compute row-standardised weights matrix</a></li></ul>
+<div class="tab-content">
+<div id="tabset-2-1" class="tab-pane active" role="tabpanel" aria-labelledby="tabset-2-1-tab">
+<p>Spatial weights define the neighborhood relationships between geographical units (e.g., counties) in the study area. In the code chunk below, the <code>poly2nb()</code> function from the <code>spdep</code> package is used to compute contiguity-based weight matrices for the study area. This function creates a list of neighboring regions by identifying those that share common boundaries. The following computes the Queen contiguity weight matrix.</p>
+<p>The summary report indicates that there are 88 area units in Hunan. The most connected unit has 11 neighboring units, while two units have only one neighbor each.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>wm_q <span class="ot">&lt;-</span> <span class="fu">poly2nb</span>(hunan, </span>
 <span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>                <span class="at">queen=</span><span class="cn">TRUE</span>)</span>
@@ -423,7 +438,9 @@ Link number distribution:
 85 with 11 links</code></pre>
 </div>
 </div>
-<p>9.4.2</p>
+</div>
+<div id="tabset-2-2" class="tab-pane" role="tabpanel" aria-labelledby="tabset-2-2-tab">
+<p>Next, we need to assign weights to each neighboring polygon. In this case, we will use equal weights (style = “W”), meaning each neighbor receives a weight of 1/(no. of neighbors). These weights are then used to calculate the weighted sum of income values from neighboring counties. While this method is straightforward and intuitive, it has a limitation: polygons on the edges of the study area may have fewer neighbors, which can lead to over- or under-estimation of spatial autocorrelation. For simplicity, we’ll use the “W” option here, but it’s worth noting that more robust alternatives, such as style = “B”, are available.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>rswm_q <span class="ot">&lt;-</span> <span class="fu">nb2listw</span>(wm_q, </span>
 <span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>                   <span class="at">style=</span><span class="st">"W"</span>, </span>
@@ -443,7 +460,18 @@ Weights constants summary:
 W 88 7744 88 37.86334 365.9147</code></pre>
 </div>
 </div>
-<p>9.5.1</p>
+</div>
+</div>
+</div>
+</section>
+<section id="gmsa-morans-i" class="level1">
+<h1>5. GMSA: Moran’s I</h1>
+<p>In this section, we will perform Moran’s I statistical testing.</p>
+<div class="tabset-margin-container"></div><div class="panel-tabset">
+<ul class="nav nav-tabs" role="tablist"><li class="nav-item" role="presentation"><a class="nav-link active" id="tabset-3-1-tab" data-bs-toggle="tab" data-bs-target="#tabset-3-1" role="tab" aria-controls="tabset-3-1" aria-selected="true">1. Moran’s I test</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-3-2-tab" data-bs-toggle="tab" data-bs-target="#tabset-3-2" role="tab" aria-controls="tabset-3-2" aria-selected="false">2. Monte Carlo Moran’s I test</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-3-3-tab" data-bs-toggle="tab" data-bs-target="#tabset-3-3" role="tab" aria-controls="tabset-3-3" aria-selected="false">3. Visualising Monte Carlo Moran’s I</a></li></ul>
+<div class="tab-content">
+<div id="tabset-3-1" class="tab-pane active" role="tabpanel" aria-labelledby="tabset-3-1-tab">
+<p>We conduct Moran’s I statistical test using the <code>moran.test()</code> function from the <code>spdep</code> package. From the results, Moran’s I is 0.30, which is greater than 0, indicating positive spatial autocorrelation. Since the p-value is less than .001, the result is statistically significant. This means that the observations are not randomly distributed but are spatially clustered, with similar values tending to be near each other.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="fu">moran.test</span>(hunan<span class="sc">$</span>GDPPC, </span>
 <span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>           <span class="at">listw=</span>rswm_q, </span>
@@ -463,10 +491,14 @@ Moran I statistic       Expectation          Variance
       0.300749970      -0.011494253       0.004348351 </code></pre>
 </div>
 </div>
-<p>9.5.2</p>
+</div>
+<div id="tabset-3-2" class="tab-pane" role="tabpanel" aria-labelledby="tabset-3-2-tab">
+<p>The Monte Carlo Moran’s I test is used to assess the significance of spatial autocorrelation by comparing the observed Moran’s I to a distribution of Moran’s I values generated through random permutations. It helps determine whether the observed spatial pattern is significantly different from what could be expected under randomness.</p>
+<p>A permutation test for Moran’s I statistic conducted using <code>moran.mc()</code> function from the <code>spdep</code> package, with 1,000 simulations. This Monte Carlo approach generates a distribution of Moran’s I values by randomly shuffling the spatial data and recalculating Moran’s I for each simulation. It allows us to compare the observed Moran’s I against this randomized distribution to assess its significance.</p>
+<p>From the results, the observed Moran’s I statistic is 0.30, which is greater than 0, indicating positive spatial autocorrelation. Since the p-value is 0.001, the result is statistically significant. This means that the observed spatial pattern is unlikely to have occurred by chance; there is spatial clustering, where similar values tend to be located near each other.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1234</span>)</span>
-<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>bperm<span class="ot">=</span> <span class="fu">moran.mc</span>(hunan<span class="sc">$</span>GDPPC, </span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>bperm <span class="ot">=</span> <span class="fu">moran.mc</span>(hunan<span class="sc">$</span>GDPPC, </span>
 <span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>                <span class="at">listw=</span>rswm_q, </span>
 <span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>                <span class="at">nsim=</span><span class="dv">999</span>, </span>
 <span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>                <span class="at">zero.policy =</span> <span class="cn">TRUE</span>, </span>
@@ -484,7 +516,9 @@ statistic = 0.30075, observed rank = 1000, p-value = 0.001
 alternative hypothesis: greater</code></pre>
 </div>
 </div>
-<p>9.5.3</p>
+</div>
+<div id="tabset-3-3" class="tab-pane" role="tabpanel" aria-labelledby="tabset-3-3-tab">
+<p>It is good practice to examine the simulated Moran’s I test statistics in greater detail. This can be done by plotting the distribution of these values as a histogram.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="fu">mean</span>(bperm<span class="sc">$</span>res[<span class="dv">1</span><span class="sc">:</span><span class="dv">999</span>])</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
@@ -505,17 +539,33 @@ alternative hypothesis: greater</code></pre>
 </div>
 </div>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb26"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="fu">hist</span>(bperm<span class="sc">$</span>res, </span>
-<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>     <span class="at">freq=</span><span class="cn">TRUE</span>, </span>
-<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a>     <span class="at">breaks=</span><span class="dv">20</span>, </span>
-<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>     <span class="at">xlab=</span><span class="st">"Simulated Moran's I"</span>)</span>
-<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a><span class="fu">abline</span>(<span class="at">v=</span><span class="dv">0</span>, </span>
-<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a>       <span class="at">col=</span><span class="st">"red"</span>) </span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb26"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a>data <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">simulated_I =</span> bperm<span class="sc">$</span>res)</span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Plot the histogram using ggplot2</span></span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(data, <span class="fu">aes</span>(<span class="at">x =</span> simulated_I)) <span class="sc">+</span></span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="at">binwidth =</span> <span class="fu">diff</span>(<span class="fu">range</span>(bperm<span class="sc">$</span>res))<span class="sc">/</span><span class="dv">20</span>, <span class="at">fill=</span><span class="st">"lightblue"</span>, <span class="at">color=</span><span class="st">"black"</span>) <span class="sc">+</span></span>
+<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_vline</span>(<span class="at">xintercept =</span> <span class="dv">0</span>, <span class="at">color =</span> <span class="st">"red"</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>) <span class="sc">+</span></span>
+<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_vline</span>(<span class="at">xintercept =</span> <span class="fl">0.30075</span>, <span class="at">color =</span> <span class="st">"purple"</span>) <span class="sc">+</span></span>
+<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">annotate</span>(<span class="st">"text"</span>, <span class="at">x =</span> <span class="fl">0.30075</span>, <span class="at">y =</span> <span class="dv">100</span>,</span>
+<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a>           <span class="at">label =</span> <span class="st">"Observed Moran's I"</span>, <span class="at">color =</span> <span class="st">"purple"</span>, <span class="at">vjust =</span> <span class="fl">0.5</span>, <span class="at">hjust =</span> <span class="fl">1.1</span>) <span class="sc">+</span></span>
+<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Simulated Moran's I"</span>, <span class="at">y =</span> <span class="st">"Frequency"</span>, <span class="at">title =</span> <span class="st">"Histogram of Simulated Moran's I"</span>) <span class="sc">+</span></span>
+<span id="cb26-11"><a href="#cb26-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output-display">
 <p><img src="Hands-on_Ex05A_files/figure-html/unnamed-chunk-13-1.png" class="img-fluid" width="672"></p>
 </div>
 </div>
-<p>9.6.1</p>
+</div>
+</div>
+</div>
+</section>
+<section id="gmsa-gearys-c" class="level1">
+<h1>6. GMSA: Geary’s C</h1>
+<p>In this section, we will perform Geary’s C statistical testing.</p>
+<div class="tabset-margin-container"></div><div class="panel-tabset">
+<ul class="nav nav-tabs" role="tablist"><li class="nav-item" role="presentation"><a class="nav-link active" id="tabset-4-1-tab" data-bs-toggle="tab" data-bs-target="#tabset-4-1" role="tab" aria-controls="tabset-4-1" aria-selected="true">1. Geary’s C test</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-4-2-tab" data-bs-toggle="tab" data-bs-target="#tabset-4-2" role="tab" aria-controls="tabset-4-2" aria-selected="false">2. Monte Carlo Geary’s C test</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-4-3-tab" data-bs-toggle="tab" data-bs-target="#tabset-4-3" role="tab" aria-controls="tabset-4-3" aria-selected="false">3. Visualising Monte Carlo Geary’s C</a></li></ul>
+<div class="tab-content">
+<div id="tabset-4-1" class="tab-pane active" role="tabpanel" aria-labelledby="tabset-4-1-tab">
+<p>We conduct Geary’s C statistical test using the <code>geary.test()</code> function from the <code>spdep</code> package. From the results, Geary’s C is 0.69, which is less than 1. This indicates positive spatial autocorrelation, meaning that neighboring areas tend to have similar values. Since the p-value is less than 0.001, the result is statistically significant, suggesting that the observed spatial pattern is unlikely due to random chance. Therefore, the data shows spatial clustering, where similar values tend to be located near each other.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb27"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="fu">geary.test</span>(hunan<span class="sc">$</span>GDPPC, <span class="at">listw=</span>rswm_q)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
@@ -532,10 +582,13 @@ Geary C statistic       Expectation          Variance
         0.6907223         1.0000000         0.0073364 </code></pre>
 </div>
 </div>
-<p>9.6.2</p>
+</div>
+<div id="tabset-4-2" class="tab-pane" role="tabpanel" aria-labelledby="tabset-4-2-tab">
+<p>A permutation test for Geary’s C statistic was conducted using the <code>geary.mc()</code> function from the <code>spdep</code> package, with 1,000 simulations. This Monte Carlo approach creates a distribution of Geary’s C values by randomly shuffling the spatial data and recalculating Geary’s C for each simulation. This allows us to compare the observed Geary’s C against the randomized distribution to assess the significance of the spatial autocorrelation.</p>
+<p>From the results, the observed Geary’s C statistic is 0.69, which is less than 1, indicating positive spatial autocorrelation. Since the p-value is 0.001, the result is statistically significant, meaning the observed spatial pattern is unlikely to have occurred by chance. Therefore, the data shows spatial clustering, where similar values are more likely to be found near each other.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb29"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1234</span>)</span>
-<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>bperm<span class="ot">=</span><span class="fu">geary.mc</span>(hunan<span class="sc">$</span>GDPPC, </span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>bperm <span class="ot">=</span> <span class="fu">geary.mc</span>(hunan<span class="sc">$</span>GDPPC, </span>
 <span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a>               <span class="at">listw=</span>rswm_q, </span>
 <span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a>               <span class="at">nsim=</span><span class="dv">999</span>)</span>
 <span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a>bperm</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
@@ -551,7 +604,9 @@ statistic = 0.69072, observed rank = 1, p-value = 0.001
 alternative hypothesis: greater</code></pre>
 </div>
 </div>
-<p>9.6.3</p>
+</div>
+<div id="tabset-4-3" class="tab-pane" role="tabpanel" aria-labelledby="tabset-4-3-tab">
+<p>Next, we plot a histogram to reveal the distribution of the simulated values.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb31"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="fu">mean</span>(bperm<span class="sc">$</span>res[<span class="dv">1</span><span class="sc">:</span><span class="dv">999</span>])</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
@@ -572,13 +627,29 @@ alternative hypothesis: greater</code></pre>
 </div>
 </div>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb37"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a><span class="fu">hist</span>(bperm<span class="sc">$</span>res, <span class="at">freq=</span><span class="cn">TRUE</span>, <span class="at">breaks=</span><span class="dv">20</span>, <span class="at">xlab=</span><span class="st">"Simulated Geary c"</span>)</span>
-<span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a><span class="fu">abline</span>(<span class="at">v=</span><span class="dv">1</span>, <span class="at">col=</span><span class="st">"red"</span>) </span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb37"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a>data <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">simulated_C =</span> bperm<span class="sc">$</span>res)</span>
+<span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-3"><a href="#cb37-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Plot the histogram using ggplot2</span></span>
+<span id="cb37-4"><a href="#cb37-4" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(data, <span class="fu">aes</span>(<span class="at">x =</span> simulated_C)) <span class="sc">+</span></span>
+<span id="cb37-5"><a href="#cb37-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="at">binwidth =</span> <span class="fu">diff</span>(<span class="fu">range</span>(bperm<span class="sc">$</span>res))<span class="sc">/</span><span class="dv">20</span>, <span class="at">fill=</span><span class="st">"lightblue"</span>, <span class="at">color=</span><span class="st">"black"</span>) <span class="sc">+</span></span>
+<span id="cb37-6"><a href="#cb37-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_vline</span>(<span class="at">xintercept =</span> <span class="dv">1</span>, <span class="at">color =</span> <span class="st">"red"</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>) <span class="sc">+</span></span>
+<span id="cb37-7"><a href="#cb37-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_vline</span>(<span class="at">xintercept =</span> <span class="fl">0.69072</span>, <span class="at">color =</span> <span class="st">"purple"</span>) <span class="sc">+</span></span>
+<span id="cb37-8"><a href="#cb37-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">annotate</span>(<span class="st">"text"</span>, <span class="at">x =</span> <span class="fl">0.69072</span>, <span class="at">y =</span> <span class="dv">100</span>,</span>
+<span id="cb37-9"><a href="#cb37-9" aria-hidden="true" tabindex="-1"></a>           <span class="at">label =</span> <span class="st">"Observed Geary's C"</span>, <span class="at">color =</span> <span class="st">"purple"</span>, <span class="at">vjust =</span> <span class="fl">0.5</span>, <span class="at">hjust =</span> <span class="sc">-</span><span class="fl">0.1</span>) <span class="sc">+</span></span>
+<span id="cb37-10"><a href="#cb37-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Simulated Geary's C"</span>, <span class="at">y =</span> <span class="st">"Frequency"</span>, <span class="at">title =</span> <span class="st">"Histogram of Simulated Geary's C"</span>) <span class="sc">+</span></span>
+<span id="cb37-11"><a href="#cb37-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output-display">
 <p><img src="Hands-on_Ex05A_files/figure-html/unnamed-chunk-19-1.png" class="img-fluid" width="672"></p>
 </div>
 </div>
-<p>9.7.1</p>
+</div>
+</div>
+</div>
+</section>
+<section id="spatial-correlogram" class="level1">
+<h1>7. Spatial Correlogram</h1>
+<p>A <strong>spatial correlogram</strong> is a tool used to assess and visualize spatial autocorrelation against increasing distances (lags) between spatial observations. It plots a measure of spatial autocorrelation, such as Moran’s I or Geary’s C, against distance, allowing us to see how relationships between spatial observations change as the distance between them increases. Correlograms help identify how far spatial dependence extends and whether it weakens, strengthens, or fluctuates with distance.</p>
+<p>::: panel-tabset ## 1. Moran’s I correlogram The <code>sp.correlogram()</code> function from the <code>spdep</code> package is used to compute a 6-lag spatial correlogram for GDP per capita (GDPPC), with Moran’s I as the measure of global spatial autocorrelation.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb38"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a>MI_corr <span class="ot">&lt;-</span> <span class="fu">sp.correlogram</span>(wm_q, </span>
 <span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a>                          hunan<span class="sc">$</span>GDPPC, </span>
@@ -590,6 +661,8 @@ alternative hypothesis: greater</code></pre>
 <p><img src="Hands-on_Ex05A_files/figure-html/unnamed-chunk-20-1.png" class="img-fluid" width="672"></p>
 </div>
 </div>
+<p>Plotting the output alone may not provide a complete interpretation, as not all autocorrelation values are statistically significant. Therefore, it’s important to review the full analysis by printing the results, as shown in the code chunk below.</p>
+<p>The results reveal that: - <strong>Spatial Clustering at Short Distances:</strong> There is evidence of spatial clustering of similar GDP per capita values within shorter distances (lags 1-3). Neighboring areas are likely to have similar economic performance. - <strong>Diminishing Spatial Autocorrelation with Distance:</strong> Beyond lag 3, spatial autocorrelation weakens and eventually becomes insignificant at larger distances. This suggests that the relationship between neighboring areas becomes weaker as the distance between them increases.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb39"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(MI_corr)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
@@ -606,7 +679,9 @@ method: Moran's I
 Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
 </div>
 </div>
-<p>9.7.2</p>
+<section id="gearys-c-correlogram" class="level2">
+<h2 class="anchored" data-anchor-id="gearys-c-correlogram">2. Geary’s C correlogram</h2>
+<p>In the code chunk below, the <code>sp.correlogram()</code> function from the <code>spdep</code> package is used to compute a 6-lag spatial correlogram for GDP per capita (GDPPC), using Geary’s C as the measure of global spatial autocorrelation.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb41"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a>GC_corr <span class="ot">&lt;-</span> <span class="fu">sp.correlogram</span>(wm_q, </span>
 <span id="cb41-2"><a href="#cb41-2" aria-hidden="true" tabindex="-1"></a>                          hunan<span class="sc">$</span>GDPPC, </span>
@@ -618,6 +693,7 @@ Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
 <p><img src="Hands-on_Ex05A_files/figure-html/unnamed-chunk-22-1.png" class="img-fluid" width="672"></p>
 </div>
 </div>
+<p>The results reveal that: - <strong>Spatial Clustering at Short Distances:</strong> There is evidence of spatial clustering of similar GDP per capita values within shorter distances (lags 1-2). Neighboring areas are likely to have similar economic performance. - <strong>Diminishing Spatial Autocorrelation with Distance:</strong> Beyond lag 2, spatial autocorrelation weakens and eventually becomes insignificant at larger distances. This suggests that the relationship between neighboring areas becomes weaker as the distance between them increases.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb42"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(GC_corr)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
@@ -636,6 +712,7 @@ Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
 </div>
 
 
+</section>
 </section>
 
 </main> <!-- /main -->
