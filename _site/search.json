@@ -488,5 +488,96 @@
     "title": "Hands-on Ex 5B",
     "section": "2. Compute row-standardised weights matrix",
     "text": "2. Compute row-standardised weights matrix\nNext, we need to assign weights to each neighboring polygon. In this case, we will use equal weights (style = “W”), meaning each neighbor receives a weight of 1/(no. of neighbors). These weights are then used to calculate the weighted sum of income values from neighboring counties. While this method is straightforward and intuitive, it has a limitation: polygons on the edges of the study area may have fewer neighbors, which can lead to over- or under-estimation of spatial autocorrelation. For simplicity, we’ll use the “W” option here, but it’s worth noting that more robust alternatives, such as style = “B”, are available.\n\nrswm_q &lt;- nb2listw(wm_q, \n                   style=\"W\", \n                   zero.policy = TRUE)\nrswm_q\n\nCharacteristics of weights list object:\nNeighbour list object:\nNumber of regions: 88 \nNumber of nonzero links: 448 \nPercentage nonzero weights: 5.785124 \nAverage number of links: 5.090909 \n\nWeights style: W \nWeights constants summary:\n   n   nn S0       S1       S2\nW 88 7744 88 37.86334 365.9147"
+  },
+  {
+    "objectID": "In-class_Ex/In-class_Ex05/In-class_Ex05.html",
+    "href": "In-class_Ex/In-class_Ex05/In-class_Ex05.html",
+    "title": "In-class Ex 5",
+    "section": "",
+    "text": "In this in-class exercise, we will use R’s sfdep package for global and local measures of spatial association analysis.\n\npacman::p_load(sf, sfdep, tmap, tidyverse)"
+  },
+  {
+    "objectID": "In-class_Ex/In-class_Ex05/In-class_Ex05.html#deriving-queens-contiguity-weights",
+    "href": "In-class_Ex/In-class_Ex05/In-class_Ex05.html#deriving-queens-contiguity-weights",
+    "title": "In-class Ex 5",
+    "section": "Deriving Queen’s contiguity weights",
+    "text": "Deriving Queen’s contiguity weights\n\nwm_q &lt;- hunan_gdppc %&gt;%\n  mutate(nb = st_contiguity(geometry),\n         wt = st_weights(nb, style = \"W\"),\n         .before = 1) # insert these two columns before column 1\n\nglimpse(wm_q)\n\nRows: 88\nColumns: 9\n$ nb        &lt;nb&gt; &lt;2, 3, 4, 57, 85&gt;, &lt;1, 57, 58, 78, 85&gt;, &lt;1, 4, 5, 85&gt;, &lt;1, 3,…\n$ wt        &lt;list&gt; &lt;0.2, 0.2, 0.2, 0.2, 0.2&gt;, &lt;0.2, 0.2, 0.2, 0.2, 0.2&gt;, &lt;0.25…\n$ NAME_2    &lt;chr&gt; \"Changde\", \"Changde\", \"Changde\", \"Changde\", \"Changde\", \"Chan…\n$ ID_3      &lt;int&gt; 21098, 21100, 21101, 21102, 21103, 21104, 21109, 21110, 2111…\n$ NAME_3    &lt;chr&gt; \"Anxiang\", \"Hanshou\", \"Jinshi\", \"Li\", \"Linli\", \"Shimen\", \"Li…\n$ ENGTYPE_3 &lt;chr&gt; \"County\", \"County\", \"County City\", \"County\", \"County\", \"Coun…\n$ County    &lt;chr&gt; \"Anxiang\", \"Hanshou\", \"Jinshi\", \"Li\", \"Linli\", \"Shimen\", \"Li…\n$ GDPPC     &lt;dbl&gt; 23667, 20981, 34592, 24473, 25554, 27137, 63118, 62202, 7066…\n$ geometry  &lt;POLYGON [°]&gt; POLYGON ((112.0625 29.75523..., POLYGON ((112.2288 2…"
+  },
+  {
+    "objectID": "In-class_Ex/In-class_Ex05/In-class_Ex05.html#computing-global-morans-i",
+    "href": "In-class_Ex/In-class_Ex05/In-class_Ex05.html#computing-global-morans-i",
+    "title": "In-class Ex 5",
+    "section": "Computing Global Moran’s I",
+    "text": "Computing Global Moran’s I\n\nmoranI &lt;- global_moran(wm_q$GDPPC, wm_q$nb, wm_q$wt)\nglimpse(moranI)\n\nList of 2\n $ I: num 0.301\n $ K: num 7.64"
+  },
+  {
+    "objectID": "In-class_Ex/In-class_Ex05/In-class_Ex05.html#performing-global-morans-i-test",
+    "href": "In-class_Ex/In-class_Ex05/In-class_Ex05.html#performing-global-morans-i-test",
+    "title": "In-class Ex 5",
+    "section": "Performing Global Moran’s I Test",
+    "text": "Performing Global Moran’s I Test\nFrom the results, Moran’s I is 0.30, which is greater than 0, indicating positive spatial autocorrelation (although it is a relative weak autocorrelation). Since the p-value is less than .001, the result is statistically significant. This means that the observations are not randomly distributed but are spatially clustered, with similar values tending to be near each other.\n\nglobal_moran_test(wm_q$GDPPC, wm_q$nb, wm_q$wt)\n\n\n    Moran I test under randomisation\n\ndata:  x  \nweights: listw    \n\nMoran I statistic standard deviate = 4.7351, p-value = 1.095e-06\nalternative hypothesis: greater\nsample estimates:\nMoran I statistic       Expectation          Variance \n      0.300749970      -0.011494253       0.004348351"
+  },
+  {
+    "objectID": "In-class_Ex/In-class_Ex05/In-class_Ex05.html#performing-global-morans-i-permutation-test",
+    "href": "In-class_Ex/In-class_Ex05/In-class_Ex05.html#performing-global-morans-i-permutation-test",
+    "title": "In-class Ex 5",
+    "section": "Performing Global Moran’s I Permutation Test",
+    "text": "Performing Global Moran’s I Permutation Test\n\nset.seed(1234)\nglobal_moran_perm(wm_q$GDPPC, wm_q$nb, wm_q$wt, nsim = 999)\n\n\n    Monte-Carlo simulation of Moran I\n\ndata:  x \nweights: listw  \nnumber of simulations + 1: 1000 \n\nstatistic = 0.30075, observed rank = 1000, p-value &lt; 2.2e-16\nalternative hypothesis: two.sided"
+  },
+  {
+    "objectID": "In-class_Ex/In-class_Ex05/In-class_Ex05.html#computing-local-morans-i",
+    "href": "In-class_Ex/In-class_Ex05/In-class_Ex05.html#computing-local-morans-i",
+    "title": "In-class Ex 5",
+    "section": "Computing Local Moran’s I",
+    "text": "Computing Local Moran’s I\nWe compute local Moran’s I of GDPPC at county level by using local_moran() of sfdep package.\n\nii: The local Moran’s I statistic.\neii: The expected value of the local Moran’s I under the randomization hypothesis.\nvar_ii: The variance of the local Moran’s I under the randomization hypothesis.\nz_ii: The standardized value (z-score) of the local Moran’s I.\np_ii_sim: The p-value of the local Moran’s I, indicating the statistical significance.\np_folded_sim: The p-value based on pysal.\nmean / median / pysal: quandrant labels. You can use mean if your variable is normally distributed, otherwise use median.\n\n\nlisa &lt;- wm_q %&gt;%\n  mutate(local_moran = local_moran(GDPPC, nb, wt, nsim = 99),\n         .before = 1) %&gt;%\n  unnest(local_moran)\nglimpse(lisa)\n\nRows: 88\nColumns: 21\n$ ii           &lt;dbl&gt; -1.468468e-03, 2.587817e-02, -1.198765e-02, 1.022468e-03,…\n$ eii          &lt;dbl&gt; -2.286452e-04, -8.339379e-03, 1.043839e-02, -3.476473e-04…\n$ var_ii       &lt;dbl&gt; 5.014443e-04, 1.043494e-02, 1.138011e-01, 4.000506e-06, 1…\n$ z_ii         &lt;dbl&gt; -0.05536664, 0.33496852, -0.06647821, 0.68501414, 0.30263…\n$ p_ii         &lt;dbl&gt; 9.558464e-01, 7.376488e-01, 9.469971e-01, 4.933350e-01, 7…\n$ p_ii_sim     &lt;dbl&gt; 0.82, 0.84, 0.88, 0.46, 0.62, 0.74, 0.08, 0.14, 0.02, 0.1…\n$ p_folded_sim &lt;dbl&gt; 0.41, 0.42, 0.44, 0.23, 0.31, 0.37, 0.04, 0.07, 0.01, 0.0…\n$ skewness     &lt;dbl&gt; -0.9009228, -0.7655438, 1.2688241, 0.9180172, 1.0918201, …\n$ kurtosis     &lt;dbl&gt; 0.76230509, 0.72077974, 2.55764113, -0.06014856, 1.076715…\n$ mean         &lt;fct&gt; Low-High, Low-Low, High-Low, High-High, High-High, High-L…\n$ median       &lt;fct&gt; High-High, High-High, High-High, High-High, High-High, Hi…\n$ pysal        &lt;fct&gt; Low-High, Low-Low, High-Low, High-High, High-High, High-L…\n$ nb           &lt;nb&gt; &lt;2, 3, 4, 57, 85&gt;, &lt;1, 57, 58, 78, 85&gt;, &lt;1, 4, 5, 85&gt;, &lt;1,…\n$ wt           &lt;list&gt; &lt;0.2, 0.2, 0.2, 0.2, 0.2&gt;, &lt;0.2, 0.2, 0.2, 0.2, 0.2&gt;, &lt;0…\n$ NAME_2       &lt;chr&gt; \"Changde\", \"Changde\", \"Changde\", \"Changde\", \"Changde\", \"C…\n$ ID_3         &lt;int&gt; 21098, 21100, 21101, 21102, 21103, 21104, 21109, 21110, 2…\n$ NAME_3       &lt;chr&gt; \"Anxiang\", \"Hanshou\", \"Jinshi\", \"Li\", \"Linli\", \"Shimen\", …\n$ ENGTYPE_3    &lt;chr&gt; \"County\", \"County\", \"County City\", \"County\", \"County\", \"C…\n$ County       &lt;chr&gt; \"Anxiang\", \"Hanshou\", \"Jinshi\", \"Li\", \"Linli\", \"Shimen\", …\n$ GDPPC        &lt;dbl&gt; 23667, 20981, 34592, 24473, 25554, 27137, 63118, 62202, 7…\n$ geometry     &lt;POLYGON [°]&gt; POLYGON ((112.0625 29.75523..., POLYGON ((112.228…\n\n\n\ntmap_mode('plot')\ntm_shape(lisa) +\n  tm_fill(\"ii\") +\n  tm_borders(alpha = 0.5) +\n  tm_view(set.zoom.limits = c(6,8)) +\n  tm_layout(main.title = \"Local Moran's I of GDPPC\",\n            main.title.size = 1)\n\n\n\n\n\ntmap_mode('plot')\ntm_shape(lisa) +\n  tm_fill(\"p_ii\") +\n  tm_borders(alpha = 0.5) +\n  tm_layout(main.title = \"p-value of Local Moran's I\",\n            main.title.size = 1)"
+  },
+  {
+    "objectID": "In-class_Ex/In-class_Ex05/In-class_Ex05.html#visualisation-local-morans-i-and-p-value",
+    "href": "In-class_Ex/In-class_Ex05/In-class_Ex05.html#visualisation-local-morans-i-and-p-value",
+    "title": "In-class Ex 5",
+    "section": "Visualisation Local Moran’s I and p-value",
+    "text": "Visualisation Local Moran’s I and p-value\n\nmap1 &lt;- tm_shape(lisa) +\n  tm_fill(\"ii\") +\n  tm_borders(alpha = 0.5) +\n  tm_view(set.zoom.limits = c(6,8)) +\n  tm_layout(main.title = \"Local Moran's I of GDPPC\",\n            main.title.size = 1)\n\nmap2 &lt;- tm_shape(lisa) +\n  tm_fill(\"p_ii\",\n          breaks = c(0, 0.001, 0.01, 0.05, 1),\n          labels = c(\"0.001\", \"0.01\", \"0.05\", \"n.s\")) +\n  tm_borders(alpha = 0.5) +\n  tm_layout(main.title = \"p-value of Local Moran's I\",\n            main.title.size = 1)\n\ntmap_arrange(map1, map2, ncol=2)"
+  },
+  {
+    "objectID": "In-class_Ex/In-class_Ex05/In-class_Ex05.html#visualising-lisa-map",
+    "href": "In-class_Ex/In-class_Ex05/In-class_Ex05.html#visualising-lisa-map",
+    "title": "In-class Ex 5",
+    "section": "Visualising LISA Map",
+    "text": "Visualising LISA Map\n\nlisa_sig &lt;- lisa %&gt;%\n  filter(p_ii &lt; 0.05)\ntmap_mode(\"plot\")\ntm_shape(lisa) +\n  tm_polygons() +\n  tm_borders(alpha = 0.5) +\n  tm_shape(lisa_sig) +\n  tm_fill(\"mean\") +\n  tm_borders(alpha = 0.4)"
+  },
+  {
+    "objectID": "In-class_Ex/In-class_Ex05/In-class_Ex05.html#computing-local-gi-statistics",
+    "href": "In-class_Ex/In-class_Ex05/In-class_Ex05.html#computing-local-gi-statistics",
+    "title": "In-class Ex 5",
+    "section": "Computing Local Gi* Statistics",
+    "text": "Computing Local Gi* Statistics\n\nwm_idw &lt;- hunan_gdppc %&gt;%\n  mutate(nb = include_self(\n    st_contiguity(geometry)),\n    wts = st_inverse_distance(nb, geometry, scale = 1, alpha =1),\n    .before = 1)\nglimpse(wm_idw)\n\nRows: 88\nColumns: 9\n$ nb        &lt;nb&gt; &lt;1, 2, 3, 4, 57, 85&gt;, &lt;1, 2, 57, 58, 78, 85&gt;, &lt;1, 3, 4, 5, 85…\n$ wts       &lt;list&gt; &lt;0.00000000, 0.01526149, 0.03515537, 0.02176677, 0.02836978…\n$ NAME_2    &lt;chr&gt; \"Changde\", \"Changde\", \"Changde\", \"Changde\", \"Changde\", \"Chan…\n$ ID_3      &lt;int&gt; 21098, 21100, 21101, 21102, 21103, 21104, 21109, 21110, 2111…\n$ NAME_3    &lt;chr&gt; \"Anxiang\", \"Hanshou\", \"Jinshi\", \"Li\", \"Linli\", \"Shimen\", \"Li…\n$ ENGTYPE_3 &lt;chr&gt; \"County\", \"County\", \"County City\", \"County\", \"County\", \"Coun…\n$ County    &lt;chr&gt; \"Anxiang\", \"Hanshou\", \"Jinshi\", \"Li\", \"Linli\", \"Shimen\", \"Li…\n$ GDPPC     &lt;dbl&gt; 23667, 20981, 34592, 24473, 25554, 27137, 63118, 62202, 7066…\n$ geometry  &lt;POLYGON [°]&gt; POLYGON ((112.0625 29.75523..., POLYGON ((112.2288 2…"
+  },
+  {
+    "objectID": "In-class_Ex/In-class_Ex05/In-class_Ex05.html#computing-local-gi-statistics-1",
+    "href": "In-class_Ex/In-class_Ex05/In-class_Ex05.html#computing-local-gi-statistics-1",
+    "title": "In-class Ex 5",
+    "section": "Computing Local Gi* Statistics",
+    "text": "Computing Local Gi* Statistics\n\nHCSA &lt;- wm_idw %&gt;%\n  mutate(local_Gi = local_gstar_perm(\n    GDPPC, nb, wts, nsim = 99),\n    .before = 1) %&gt;%\n  unnest(local_Gi)\nHCSA\n\nSimple feature collection with 88 features and 18 fields\nGeometry type: POLYGON\nDimension:     XY\nBounding box:  xmin: 108.7831 ymin: 24.6342 xmax: 114.2544 ymax: 30.12812\nGeodetic CRS:  WGS 84\n# A tibble: 88 × 19\n    gi_star cluster     e_gi  var_gi std_dev p_value p_sim p_folded_sim skewness\n      &lt;dbl&gt; &lt;fct&gt;      &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt; &lt;dbl&gt;        &lt;dbl&gt;    &lt;dbl&gt;\n 1  0.261   Low     0.00132  1.82e-7  0.0839 9.33e-1  0.7          0.35    1.20 \n 2 -0.276   Low     0.00102  7.98e-8 -0.266  7.90e-1  0.92         0.46    0.717\n 3  0.00573 High    0.00148  2.25e-7  0.0920 9.27e-1  0.72         0.36    1.54 \n 4  0.528   High    0.00147  2.72e-7  0.506  6.13e-1  0.38         0.19    1.55 \n 5  0.466   High    0.00140  2.76e-7  0.337  7.36e-1  0.48         0.24    1.46 \n 6 -0.445   High    0.000928 8.31e-8 -0.321  7.48e-1  0.9          0.45    1.21 \n 7  2.99    High    0.000676 4.28e-8  3.17   1.54e-3  0.04         0.02    1.29 \n 8  2.04    High    0.00148  1.25e-7  2.11   3.49e-2  0.1          0.05    1.32 \n 9  4.42    High    0.00132  1.32e-7  3.93   8.49e-5  0.02         0.01    1.27 \n10  1.21    Low     0.00180  1.46e-7  1.24   2.15e-1  0.28         0.14    0.521\n# ℹ 78 more rows\n# ℹ 10 more variables: kurtosis &lt;dbl&gt;, nb &lt;nb&gt;, wts &lt;list&gt;, NAME_2 &lt;chr&gt;,\n#   ID_3 &lt;int&gt;, NAME_3 &lt;chr&gt;, ENGTYPE_3 &lt;chr&gt;, County &lt;chr&gt;, GDPPC &lt;dbl&gt;,\n#   geometry &lt;POLYGON [°]&gt;"
+  },
+  {
+    "objectID": "In-class_Ex/In-class_Ex05/In-class_Ex05.html#visualising-gi",
+    "href": "In-class_Ex/In-class_Ex05/In-class_Ex05.html#visualising-gi",
+    "title": "In-class Ex 5",
+    "section": "Visualising Gi*",
+    "text": "Visualising Gi*\n\ntmap_mode(\"plot\")\ntm_shape(HCSA) +\n  tm_fill(\"gi_star\") +\n  tm_borders(alpha = 0.5) +\n  tm_view(set.zoom.limits = c(6,8))"
+  },
+  {
+    "objectID": "In-class_Ex/In-class_Ex05/In-class_Ex05.html#visualising-p-value-of-hcsa",
+    "href": "In-class_Ex/In-class_Ex05/In-class_Ex05.html#visualising-p-value-of-hcsa",
+    "title": "In-class Ex 5",
+    "section": "Visualising p-value of HCSA",
+    "text": "Visualising p-value of HCSA\n\ntmap_mode(\"plot\")\ntm_shape(HCSA) +\n  tm_fill(\"p_sim\") +\n  tm_borders(alpha = 0.5)"
+  },
+  {
+    "objectID": "In-class_Ex/In-class_Ex05/In-class_Ex05.html#visualising-hot-spot-and-cold-spot-areas",
+    "href": "In-class_Ex/In-class_Ex05/In-class_Ex05.html#visualising-hot-spot-and-cold-spot-areas",
+    "title": "In-class Ex 5",
+    "section": "Visualising Hot Spot and Cold Spot Areas",
+    "text": "Visualising Hot Spot and Cold Spot Areas\n\nHCSA_sig &lt;- HCSA %&gt;%\n  filter(p_sim &lt; 0.05)\n\ntmap_mode(\"plot\")\ntm_shape(HCSA) +\n  tm_polygons() +\n  tm_borders(alpha = 0.5) +\n  tm_shape(HCSA_sig) +\n  tm_fill(\"cluster\") +\n  tm_borders(alpha = 0.4)"
   }
 ]
