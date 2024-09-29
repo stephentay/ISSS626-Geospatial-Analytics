@@ -1,0 +1,764 @@
+---
+title: "Hands-on Ex 6"
+subtitle: "Geographical Segmentation with Spatially Constrained Clustering Techniques"
+author: "Stephen Tay"
+date: "29 Sep 2024"
+date-modified:  "last-modified"
+execute: 
+  eval: true
+  echo: true
+  message: false
+  freeze: true 
+---
+
+# 1. Overview
+In geobusiness and spatial policy, a key practice is the segmentation of markets or planning areas into homogeneous regions using multivariate data. This segmentation allows for more targeted planning, resource allocation, and policy-making. This exercise focuses on **delineating homogeneous regions using geographically referenced multivariate data**, employing two primary analytical techniques:
+
+- Hierarchical cluster analysis
+- Spatially constrained cluster analysis
+
+In this hands-on exercise, we will apply these techniques to segment Shan State, Myanmar, into homogeneous regions based on various Information and Communication Technology (ICT) measures. These measures include the availability of radio, television, landline phones, mobile phones, computers, and internet access at home. By understanding the spatial distribution of these ICT indicators, we can gain insights into the region’s digital landscape and inform policy decisions.
+
+A few new R packages required for geographical segmentation and analysis include:
+
+- `rgdal` for spatial data handling 
+- `coorplot`, `ggpubr`, `heatmaply`, `psych`, `GGally`: These packages are used for multivariate data visualisation
+- `cluster`, `ClustGeo`, `factoextra`, `NbClust`: These packages facilitate cluster analysis.
+
+```{r}
+pacman::p_load(spdep, tmap, sf, ClustGeo, 
+               ggpubr, cluster, factoextra, NbClust,
+               heatmaply, corrplot, psych, tidyverse, GGally)
+```
+
+# 2. Importing & Transforming Data
+Two datasets will be used in this hands-on exercise:
+
+- **Myanmar Township Boundary Data**: A geospatial dataset in ESRI shapefile format that outlines the township boundaries of Myanmar
+- **2014 Myanmar Population and Housing Census**: A CSV file containing township-level information from the 2014 census.
+
+::: panel-tabset
+## Myanmar Township Boundary
+```{r}
+shan_sf <- st_read(dsn = "data/geospatial", 
+                   layer = "myanmar_township_boundaries") %>%
+  filter(ST %in% c("Shan (East)", "Shan (North)", "Shan (South)")) %>%
+  select(c(2:7))
+```
+
+```{r}
+shan_sf
+```
+
+```{r}
+glimpse(shan_sf)
+```
+
+## Myanmar Population and Housing Census
+There are a total of 11 columns and 55 observations.
+```{r}
+ict <- read_csv("data/aspatial/Shan-ICT.csv")
+```
+
+```{r}
+summary(ict)
+```
+
+## Creating New Variables
+The values are measured as the number of households. Using these numbers directly can introduce bias, as townships with more households are likely to have higher counts for owning radios, TVs, etc. To address this, we calculate the penetration rate for six ICT variables:
+
+- RADIO_PR: Radio Penetration Rate
+- TV_PR: TV Penetration Rate
+- LLPHONE_PR: Landline Phone Penetration Rate
+- MPHONE_PR: Mobile Phone Penetration Rate
+- COMPUTER_PR: Computer Penetration Rate
+- INTERNET_PR: Home Internet Penetration Rate
+
+```{r}
+ict_derived <- ict %>%
+  mutate(`RADIO_PR` = `Radio`/`Total households`*1000) %>%
+  mutate(`TV_PR` = `Television`/`Total households`*1000) %>%
+  mutate(`LLPHONE_PR` = `Land line phone`/`Total households`*1000) %>%
+  mutate(`MPHONE_PR` = `Mobile phone`/`Total households`*1000) %>%
+  mutate(`COMPUTER_PR` = `Computer`/`Total households`*1000) %>%
+  mutate(`INTERNET_PR` = `Internet at home`/`Total households`*1000) %>%
+  rename(`DT_PCODE` =`District Pcode`,`DT`=`District Name`,
+         `TS_PCODE`=`Township Pcode`, `TS`=`Township Name`,
+         `TT_HOUSEHOLDS`=`Total households`,
+         `RADIO`=`Radio`, `TV`=`Television`, 
+         `LLPHONE`=`Land line phone`, `MPHONE`=`Mobile phone`,
+         `COMPUTER`=`Computer`, `INTERNET`=`Internet at home`) 
+
+summary(ict_derived)
+```
+:::
+
+
+# 3. Exploratory Data Analysis
+
+## 3.1 EDA using statistical graphics
+We will be plotting the distribution of the variables.
+
+::: panel-tabset
+### Households with Radio
+The top plot is a histogram of households with radios, illustrating the overall shape and distribution of the data (e.g., normal distribution, left or right skew). The bottom plot is a boxplot for the same data, highlighting potential outliers.
+```{r}
+ggplot(data=ict_derived, 
+       aes(x=`RADIO`)) +
+  geom_histogram(bins=20, 
+                 color="black", 
+                 fill="light blue")
+```
+
+
+```{r}
+ggplot(data=ict_derived, 
+       aes(x=`RADIO`)) +
+  geom_boxplot(color="black", 
+               fill="light blue")
+```
+
+### Radio Penetration Rate
+Now, we will plot the radio penetration rate. The distribution of the penetration rate is less skewed and has fewer outliers compared to the number of households with radios. This is expected, as larger townships tend to have more households, leading to more extreme values.
+```{r}
+ggplot(data=ict_derived, 
+       aes(x=`RADIO_PR`)) +
+  geom_histogram(bins=20, 
+                 color="black", 
+                 fill="light blue")
+```
+
+
+```{r}
+ggplot(data=ict_derived, 
+       aes(x=`RADIO_PR`)) +
+  geom_boxplot(color="black", 
+               fill="light blue")
+```
+
+### Histograms of all ICT penetration rates
+The chart below displays histograms for each of the six ICT penetration rates.
+```{r}
+#| code-fold: true
+radio <- ggplot(data=ict_derived, 
+             aes(x= `RADIO_PR`)) +
+  geom_histogram(bins=20, 
+                 color="black", 
+                 fill="light blue")
+
+tv <- ggplot(data=ict_derived, 
+             aes(x= `TV_PR`)) +
+  geom_histogram(bins=20, 
+                 color="black", 
+                 fill="light blue")
+
+llphone <- ggplot(data=ict_derived, 
+             aes(x= `LLPHONE_PR`)) +
+  geom_histogram(bins=20, 
+                 color="black", 
+                 fill="light blue")
+
+mphone <- ggplot(data=ict_derived, 
+             aes(x= `MPHONE_PR`)) +
+  geom_histogram(bins=20, 
+                 color="black", 
+                 fill="light blue")
+
+computer <- ggplot(data=ict_derived, 
+             aes(x= `COMPUTER_PR`)) +
+  geom_histogram(bins=20, 
+                 color="black", 
+                 fill="light blue")
+
+internet <- ggplot(data=ict_derived, 
+             aes(x= `INTERNET_PR`)) +
+  geom_histogram(bins=20, 
+                 color="black", 
+                 fill="light blue")
+
+ggarrange(radio, tv, llphone, mphone, computer, internet, 
+          ncol = 3, 
+          nrow = 2)
+```
+
+### Boxplots for all ICT penetration rates
+The chart below displays boxplots for each of the six ICT penetration rates.
+```{r}
+#| code-fold: true
+radio_boxplot <- ggplot(data=ict_derived, 
+                        aes(x= `RADIO_PR`)) +
+  geom_boxplot(color="black", fill="light blue")
+
+tv_boxplot <- ggplot(data=ict_derived, 
+                     aes(x= `TV_PR`)) +
+  geom_boxplot(color="black", fill="light blue")
+
+llphone_boxplot <- ggplot(data=ict_derived, 
+                          aes(x= `LLPHONE_PR`)) +
+  geom_boxplot(color="black", fill="light blue")
+
+mphone_boxplot <- ggplot(data=ict_derived, 
+                         aes(x= `MPHONE_PR`)) +
+  geom_boxplot(color="black", fill="light blue")
+
+computer_boxplot <- ggplot(data=ict_derived, 
+                           aes(x= `COMPUTER_PR`)) +
+  geom_boxplot(color="black", fill="light blue")
+
+internet_boxplot <- ggplot(data=ict_derived, 
+                           aes(x= `INTERNET_PR`)) +
+  geom_boxplot(color="black", fill="light blue")
+
+ggarrange(radio_boxplot, tv_boxplot, llphone_boxplot, 
+          mphone_boxplot, computer_boxplot, internet_boxplot, 
+          ncol = 3, 
+          nrow = 2)
+```
+:::
+
+## 3.2 EDA using choropleth map
+
+::: panel-tabset
+### Joining geospatial data with aspatial data
+Before plotting the choropleth map, we need to join the ICT variables from the aspatial dataset to the Myanmar Township geospatial dataset. The `ict_derived` dataset is left-joined with the `shan_sf` dataset using the `TS_PCODE` key. We use `qtm()` to have a quick look at the distribution of Radio penetration rate.
+
+```{r}
+shan_sf <- left_join(shan_sf, 
+                     ict_derived, by=c("TS_PCODE"="TS_PCODE"))
+
+qtm(shan_sf, "RADIO_PR")
+```
+
+### Radio
+The plot below shows the choropleth map of the total number of households in each town (left) and the number of households with radios (right). Towns with larger number of households are also showing higher number of radio ownership.
+```{r}
+TT_HOUSEHOLDS.map <- tm_shape(shan_sf) + 
+  tm_fill(col = "TT_HOUSEHOLDS",
+          n = 5,
+          style = "jenks", 
+          title = "Total households") + 
+  tm_borders(alpha = 0.5) 
+
+RADIO.map <- tm_shape(shan_sf) + 
+  tm_fill(col = "RADIO",
+          n = 5,
+          style = "jenks",
+          title = "Households w/ Radio") + 
+  tm_borders(alpha = 0.5) 
+
+tmap_arrange(TT_HOUSEHOLDS.map, RADIO.map,
+             asp=NA, ncol=2)
+```
+
+The plots below display a choropleth map of the total number of households in each township (left) and the radio penetration rate (right). We observe that higher penetration rates are found in areas with fewer households.
+```{r}
+tm_shape(shan_sf) +
+    tm_polygons(c("TT_HOUSEHOLDS", "RADIO_PR"),
+                style="jenks") +
+    tm_facets(sync = TRUE, ncol = 2) +
+  tm_legend(legend.position = c("right", "bottom"))+
+  tm_layout(outer.margins=0, asp=0)
+```
+### TV
+Below is the choropleth maps for Total Households, Households with TVs, and TV Penetration Rate.
+```{r}
+#| code-fold: true
+TV.map <- tm_shape(shan_sf) + 
+  tm_fill(col = "TV",
+          n = 5,
+          style = "jenks",
+          title = "Households w/ TV") + 
+  tm_borders(alpha = 0.5) 
+
+TV_PR.map <- tm_shape(shan_sf) + 
+  tm_fill(col = "TV_PR",
+          n = 5,
+          style = "jenks",
+          title = "TV Penetration Rate") + 
+  tm_borders(alpha = 0.5) 
+
+tmap_arrange(TT_HOUSEHOLDS.map, TV.map, TV_PR.map,
+             asp=NA, ncol=3)
+```
+
+### Landline Phone
+Below is the choropleth maps for Total Households, Households with Landline Phones, and Landline Phone Penetration Rate.
+```{r}
+#| code-fold: true
+LLPHONE.map <- tm_shape(shan_sf) + 
+  tm_fill(col = "LLPHONE",
+          n = 5,
+          style = "jenks",
+          title = "Households w/ Landline") + 
+  tm_borders(alpha = 0.5) 
+
+LLPHONE_PR.map <- tm_shape(shan_sf) + 
+  tm_fill(col = "LLPHONE_PR",
+          n = 5,
+          style = "jenks",
+          title = "Landline Penetration Rate") + 
+  tm_borders(alpha = 0.5) 
+
+tmap_arrange(TT_HOUSEHOLDS.map, LLPHONE.map, LLPHONE_PR.map,
+             asp=NA, ncol=3)
+```
+
+### Mobile Phone
+Below is the choropleth maps for Total Households, Households with Mobile Phones, and Mobile Phone Penetration Rate.
+```{r}
+#| code-fold: true
+MPHONE.map <- tm_shape(shan_sf) + 
+  tm_fill(col = "MPHONE",
+          n = 5,
+          style = "jenks",
+          title = "Households w/ Mobile") + 
+  tm_borders(alpha = 0.5) 
+
+MPHONE_PR.map <- tm_shape(shan_sf) + 
+  tm_fill(col = "MPHONE_PR",
+          n = 5,
+          style = "jenks",
+          title = "Mobile Penetration Rate") + 
+  tm_borders(alpha = 0.5) 
+
+tmap_arrange(TT_HOUSEHOLDS.map, MPHONE.map, MPHONE_PR.map,
+             asp=NA, ncol=3)
+```
+
+### Computer
+Below is the choropleth maps for Total Households, Households with Computers, and Computer Penetration Rate.
+```{r}
+#| code-fold: true
+COMPUTER.map <- tm_shape(shan_sf) + 
+  tm_fill(col = "COMPUTER",
+          n = 5,
+          style = "jenks",
+          title = "Households w/ Computer") + 
+  tm_borders(alpha = 0.5) 
+
+COMPUTER_PR.map <- tm_shape(shan_sf) + 
+  tm_fill(col = "COMPUTER_PR",
+          n = 5,
+          style = "jenks",
+          title = "Computer Penetration Rate") + 
+  tm_borders(alpha = 0.5) 
+
+tmap_arrange(TT_HOUSEHOLDS.map, COMPUTER.map, COMPUTER_PR.map,
+             asp=NA, ncol=3)
+```
+
+### Home Internet
+Below is the choropleth maps for Total Households, Households with Home Internet, and Internet Penetration Rate.
+```{r}
+#| code-fold: true
+INTERNET.map <- tm_shape(shan_sf) + 
+  tm_fill(col = "INTERNET",
+          n = 5,
+          style = "jenks",
+          title = "Households w/ Internet") + 
+  tm_borders(alpha = 0.5) 
+
+INTERNET_PR.map <- tm_shape(shan_sf) + 
+  tm_fill(col = "INTERNET_PR",
+          n = 5,
+          style = "jenks",
+          title = "Internet Penetration Rate") + 
+  tm_borders(alpha = 0.5) 
+
+tmap_arrange(TT_HOUSEHOLDS.map, INTERNET.map, INTERNET_PR.map,
+             asp=NA, ncol=3)
+```
+:::
+
+## 3.3 Correlation Analysis
+Before performing cluster analysis, it’s crucial to ensure that the clustering variables are not highly correlated. We use the `corrplot.mixed()` function from the `corrplot` package to visualise and analyse the correlations among the input variables.
+
+The correlation plot above reveals that `COMPUTER_PR` and `INTERNET_PR` are highly correlated, suggesting that only one of these variables should be included in the cluster analysis.
+```{r}
+cluster_vars.cor = cor(ict_derived[,12:17])
+corrplot.mixed(cluster_vars.cor,
+         lower = "ellipse", 
+               upper = "number",
+               tl.pos = "lt",
+               diag = "l",
+               tl.col = "black")
+```
+
+# 4. Hierarchical Cluster Analysis
+
+```{r}
+cluster_vars <- shan_sf %>%
+  st_set_geometry(NULL) %>%
+  select("TS.x", "RADIO_PR", "TV_PR", "LLPHONE_PR", "MPHONE_PR", "COMPUTER_PR")
+head(cluster_vars,10)
+```
+
+
+```{r}
+row.names(cluster_vars) <- cluster_vars$"TS.x"
+head(cluster_vars,10)
+```
+
+
+```{r}
+shan_ict <- select(cluster_vars, c(2:6))
+head(shan_ict, 10)
+```
+
+12.7.3 Min-Max Standardisation
+```{r}
+shan_ict.std <- normalize(shan_ict)
+summary(shan_ict.std)
+```
+
+12.7.4 Z-score standardisation
+```{r}
+shan_ict.z <- scale(shan_ict)
+describe(shan_ict.z)
+```
+12.7.5 Visualising the standardised clustering variables
+
+```{r}
+r <- ggplot(data=ict_derived, 
+             aes(x= `RADIO_PR`)) +
+  geom_histogram(bins=20, 
+                 color="black", 
+                 fill="light blue") +
+  ggtitle("Raw values without standardisation")
+
+shan_ict_s_df <- as.data.frame(shan_ict.std)
+s <- ggplot(data=shan_ict_s_df, 
+       aes(x=`RADIO_PR`)) +
+  geom_histogram(bins=20, 
+                 color="black", 
+                 fill="light blue") +
+  ggtitle("Min-Max Standardisation")
+
+shan_ict_z_df <- as.data.frame(shan_ict.z)
+z <- ggplot(data=shan_ict_z_df, 
+       aes(x=`RADIO_PR`)) +
+  geom_histogram(bins=20, 
+                 color="black", 
+                 fill="light blue") +
+  ggtitle("Z-score Standardisation")
+
+ggarrange(r, s, z,
+          ncol = 3,
+          nrow = 1)
+```
+
+
+```{r}
+r <- ggplot(data=ict_derived, 
+             aes(x= `RADIO_PR`)) +
+  geom_density(color="black",
+               fill="light blue") +
+  ggtitle("Raw values without standardisation")
+
+shan_ict_s_df <- as.data.frame(shan_ict.std)
+s <- ggplot(data=shan_ict_s_df, 
+       aes(x=`RADIO_PR`)) +
+  geom_density(color="black",
+               fill="light blue") +
+  ggtitle("Min-Max Standardisation")
+
+shan_ict_z_df <- as.data.frame(shan_ict.z)
+z <- ggplot(data=shan_ict_z_df, 
+       aes(x=`RADIO_PR`)) +
+  geom_density(color="black",
+               fill="light blue") +
+  ggtitle("Z-score Standardisation")
+
+ggarrange(r, s, z,
+          ncol = 3,
+          nrow = 1)
+```
+
+12.7.6 Computing proximity matrix
+```{r}
+proxmat <- dist(shan_ict, method = 'euclidean')
+proxmat
+```
+
+12.7.7 Computing hierarchical clustering
+```{r}
+hclust_ward <- hclust(proxmat, method = 'ward.D')
+plot(hclust_ward, cex = 0.6)
+```
+
+12.7.8 Selecting the optimal clustering algorithm
+```{r}
+m <- c( "average", "single", "complete", "ward")
+names(m) <- c( "average", "single", "complete", "ward")
+
+ac <- function(x) {
+  agnes(shan_ict, method = x)$ac
+}
+
+map_dbl(m, ac)
+```
+
+12.7.9 Determining Optimal Clusters
+```{r}
+set.seed(12345)
+gap_stat <- clusGap(shan_ict, 
+                    FUN = hcut, 
+                    nstart = 25, 
+                    K.max = 10, 
+                    B = 50)
+# Print the result
+print(gap_stat, method = "firstmax")
+```
+
+
+```{r}
+fviz_gap_stat(gap_stat)
+```
+
+12.7.10 Interpreting the dendrograms
+```{r}
+plot(hclust_ward, cex = 0.6)
+rect.hclust(hclust_ward, 
+            k = 6, 
+            border = 2:5)
+```
+
+12.7.11 Visually-driven hierarchical clustering analysis
+```{r}
+shan_ict_mat <- data.matrix(shan_ict)
+```
+
+
+```{r}
+heatmaply(normalize(shan_ict_mat),
+          Colv=NA,
+          dist_method = "euclidean",
+          hclust_method = "ward.D",
+          seriate = "OLO",
+          colors = Blues,
+          k_row = 6,
+          margins = c(NA,200,60,NA),
+          fontsize_row = 4,
+          fontsize_col = 5,
+          main="Geographic Segmentation of Shan State by ICT indicators",
+          xlab = "ICT Indicators",
+          ylab = "Townships of Shan State"
+          )
+```
+
+12.7.12 Mapping the clusters formed
+```{r}
+groups <- as.factor(cutree(hclust_ward, k=6))
+```
+
+
+```{r}
+shan_sf_cluster <- cbind(shan_sf, as.matrix(groups)) %>%
+  rename(`CLUSTER`=`as.matrix.groups.`)
+```
+
+
+```{r}
+qtm(shan_sf_cluster, "CLUSTER")
+```
+
+12.8 Spatially Constrained Clustering: SKATER approach
+```{r}
+shan_sp <- as_Spatial(shan_sf)
+```
+
+
+```{r}
+shan.nb <- poly2nb(shan_sp)
+summary(shan.nb)
+```
+
+
+```{r}
+coords <- st_coordinates(
+  st_centroid(st_geometry(shan_sf)))
+```
+
+
+```{r}
+plot(st_geometry(shan_sf), 
+     border=grey(.5))
+plot(shan.nb,
+     coords, 
+     col="blue", 
+     add=TRUE)
+```
+
+12.8.3 Computing minimum spanning tree
+```{r}
+lcosts <- nbcosts(shan.nb, shan_ict)
+```
+
+
+```{r}
+shan.w <- nb2listw(shan.nb, 
+                   lcosts, 
+                   style="B")
+summary(shan.w)
+```
+
+12.8.4 Computing minimum spanning tree
+```{r}
+shan.mst <- mstree(shan.w)
+class(shan.mst)
+```
+
+
+```{r}
+dim(shan.mst)
+```
+
+
+```{r}
+head(shan.mst)
+```
+
+
+```{r}
+plot(st_geometry(shan_sf), 
+                 border=gray(.5))
+plot.mst(shan.mst, 
+         coords, 
+         col="blue", 
+         cex.lab=0.7, 
+         cex.circles=0.005, 
+         add=TRUE)
+```
+
+12.8.5 Computing spatially constrained clusters using SKATER method
+```{r}
+clust6 <- spdep::skater(edges = shan.mst[,1:2], 
+                 data = shan_ict, 
+                 method = "euclidean", 
+                 ncuts = 5)
+str(clust6)
+```
+
+
+```{r}
+ccs6 <- clust6$groups
+ccs6
+```
+
+
+```{r}
+table(ccs6)
+```
+
+
+```{r}
+plot(st_geometry(shan_sf), 
+     border=gray(.5))
+plot(clust6, 
+     coords, 
+     cex.lab=.7,
+     groups.colors=c("red","green","blue", "brown", "pink"),
+     cex.circles=0.005, 
+     add=TRUE)
+```
+
+12.8.6 Visualising the clusters in choropleth map
+```{r}
+groups_mat <- as.matrix(clust6$groups)
+shan_sf_spatialcluster <- cbind(shan_sf_cluster, as.factor(groups_mat)) %>%
+  rename(`SP_CLUSTER`=`as.factor.groups_mat.`)
+qtm(shan_sf_spatialcluster, "SP_CLUSTER")
+```
+
+
+```{r}
+hclust.map <- qtm(shan_sf_cluster,
+                  "CLUSTER") + 
+  tm_borders(alpha = 0.5) 
+
+shclust.map <- qtm(shan_sf_spatialcluster,
+                   "SP_CLUSTER") + 
+  tm_borders(alpha = 0.5) 
+
+tmap_arrange(hclust.map, shclust.map,
+             asp=NA, ncol=2)
+```
+#12.9
+12.9.2 Ward-like hierarchical clustering: ClustGeo
+```{r}
+nongeo_cluster <- hclustgeo(proxmat)
+plot(nongeo_cluster, cex = 0.5)
+rect.hclust(nongeo_cluster, 
+            k = 6, 
+            border = 2:5)
+```
+
+12.9.2.1 Mapping the clusters formed
+```{r}
+groups <- as.factor(cutree(nongeo_cluster, k=6))
+shan_sf_ngeo_cluster <- cbind(shan_sf, as.matrix(groups)) %>%
+  rename(`CLUSTER` = `as.matrix.groups.`)
+qtm(shan_sf_ngeo_cluster, "CLUSTER")
+```
+
+12.9.3 Spatially Constrained Hierarchical Clustering
+```{r}
+dist <- st_distance(shan_sf, shan_sf)
+distmat <- as.dist(dist)
+```
+
+
+```{r}
+cr <- choicealpha(proxmat, distmat, range.alpha = seq(0, 1, 0.1), K=6, graph = TRUE)
+```
+
+
+```{r}
+clustG <- hclustgeo(proxmat, distmat, alpha = 0.3)
+groups <- as.factor(cutree(clustG, k=6))
+shan_sf_Gcluster <- cbind(shan_sf, as.matrix(groups)) %>%
+  rename(`CLUSTER` = `as.matrix.groups.`)
+qtm(shan_sf_Gcluster, "CLUSTER")
+```
+
+12.10 Visual Interpretation of Clusters
+```{r}
+ggplot(data = shan_sf_ngeo_cluster,
+       aes(x = CLUSTER, y = RADIO_PR)) +
+  geom_boxplot()
+```
+
+12.10.2 Multivariate Visualisation
+```{r}
+ggparcoord(data = shan_sf_ngeo_cluster, 
+           columns = c(17:21), 
+           scale = "globalminmax",
+           alphaLines = 0.2,
+           boxplot = TRUE, 
+           title = "Multiple Parallel Coordinates Plots of ICT Variables by Cluster") +
+  facet_grid(~ CLUSTER) + 
+  theme(axis.text.x = element_text(angle = 30))
+```
+
+
+```{r}
+shan_sf_ngeo_cluster %>% 
+  st_set_geometry(NULL) %>%
+  group_by(CLUSTER) %>%
+  summarise(mean_RADIO_PR = mean(RADIO_PR),
+            mean_TV_PR = mean(TV_PR),
+            mean_LLPHONE_PR = mean(LLPHONE_PR),
+            mean_MPHONE_PR = mean(MPHONE_PR),
+            mean_COMPUTER_PR = mean(COMPUTER_PR))
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
