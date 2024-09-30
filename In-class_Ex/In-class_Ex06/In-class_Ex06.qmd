@@ -1,0 +1,180 @@
+---
+title: "In-class Ex 6"
+subtitle: ""
+author: "Stephen Tay"
+date: "30 Sep 2024"
+date-modified:  "last-modified"
+execute: 
+  eval: true
+  echo: true
+  message: false
+  warning: false
+  freeze: true 
+---
+
+# Overview
+In this exercise, we will perform an **Emerging Hot Spot Analysis**, a spatio-temporal method used to identify and describe the evolution of hot spots and cold spots over time. The analysis involves four main steps:
+
+-	Building a space-time cube.
+-	Calculating the Getis-Ord Gi* statistic for each bin using an FDR correction (there are some differences in calculating Gi* when we are using time series data).
+-	Evaluating hot and cold spot trends with the Mann-Kendall (MK) trend test.
+-	Categorising each study area location based on the trend’s z-score and p-value, along with the hot spot z-score and p-value.
+
+The `plotly` package enables the creation of interactive plots, allowing you to explore and monitor trends over time.
+```{r}
+pacman::p_load(sf, sfdep, tmap, plotly, tidyverse, Kendall)
+```
+
+# 1. Importing & Transforming Data
+Two datasets will be used in this in-class exercise:
+
+- **Hunan County Boundary Layer**: A geospatial dataset in ESRI shapefile format.
+- **Hunan_GDPPC.csv**: A CSV file containing GDPPC indicator for Hunan counties, from 2005 to 2021.
+
+::: panel-tabset
+## Hunan shapefile
+In this in-class exercise, there’s no need to convert the Geographical Coordinate System to a projected coordinate system.
+```{r}
+hunan <- st_read(dsn = "data/geospatial", 
+                 layer = "Hunan") 
+```
+## Hunan's GDPPC
+```{r}
+GDPPC <- read_csv("data/aspatial/Hunan_GDPPC.csv")
+```
+:::
+
+# 2. Creating a Time Series Cube
+`spacetime()` function of the `sfdep` package is used to create an spatio-temporal cube. In using the spacetime cube, **the space entity (e.g. administrative boundary or the hexagon) must remain constant over time**; only the attribute in the space entity changes over time.
+It is useful to verify that your object is a space-time cube object using the `is_spacetime_cube()` function.
+
+Note that your time field must be an integer (it cannot be real number, e.g. you may have to drop the time values in order to make it an integer time value.)
+```{r}
+GDPPC_st <- spacetime(GDPPC, # attribute datafile
+                      hunan, # geospatial datefile
+                      .loc_col = "County", # spatial field
+                      .time_col = "Year" # time field which must be in integer
+                      )
+is_spacetime_cube(GDPPC_st)
+```
+
+# 3. Computing Gi*
+We are computing Gi* which includes self (Gi statistic does not include self).
+When computing Gi* over time, we need to `activate("geometry")`.
+
+The code below identifies neighbours and derives inverse distance weights.
+
+We use `set_nbs()` and `set_wts()` to fix the rows as row order is very important in the analysis.
+
+This dataset now has neighbours and weights for each time-slice.
+```{r}
+GDPPC_nb <- GDPPC_st %>%
+  activate("geometry") %>%
+  mutate(nb = include_self(
+    st_contiguity(geometry)),
+    wt = st_inverse_distance(nb, # we are using the inverse distance weight
+                             geometry,
+                             scale = 1,
+                             alpha = 1),
+    .before = 1) %>%
+  set_nbs("nb") %>% # we fix them as row order is very important 
+  set_wts("wt")
+```
+
+Next, we calculate the local Gi* for each location by grouping the data by year and using the `local_gstar_perm()` function from the `sfdep` package. Then, we use `unnest()` to expand the `gi_star` column in the newly created gi_star data frame.
+```{r}
+gi_star <- GDPPC_nb %>%
+  group_by(Year) %>%
+  mutate(gi_star = local_gstar_perm(
+    GDPPC, nb, wt)) %>%
+  tidyr::unnest(gi_star)
+```
+
+4. MK test
+A confirmatory test to test whether there is a monotonic trend.
+To do MK test, you need to have at least 12 time periods. 
+```{r}
+cbg <- gi_star %>%
+  ungroup() %>%
+  filter(County == "Changsha") %>%
+  select(County, Year, gi_star)
+```
+
+```{r}
+ggplot(data = cbg, aes(x = Year, y = gi_star)) +
+  geom_line() +
+  theme_light()
+```
+
+Interactive Mann-Kendall Plot
+```{r}
+p <- ggplot(data = cbg, aes(x = Year, y = gi_star)) +
+  geom_line() +
+  theme_light()
+
+ggplotly(p)
+```
+
+Mann-Kendall Test Report
+In the results, `sl` represents the p-value. Since the p-value is less than 0.05 and tau is greater than 0, we reject the null hypothesis, indicating a slight upward trend.
+```{r}
+cbg %>%
+  summarise(mk = list(
+    unclass(
+      Kendall::MannKendall(gi_star)))) %>%
+  tidyr::unnest_wider(mk)
+```
+Mann-Kendall test dataframe
+We can perform the Mann-Kendall test for each location simultaneously by using `group_by(County)`.
+
+Some counties have statistical significance, while some do not. Some have positive trends, some have declining trends. 
+```{r}
+ehsa <- gi_star %>%
+  group_by(County) %>%
+  summarise(mk = list(
+    unclass(
+      Kendall::MannKendall(gi_star)))) %>%
+  tidyr::unnest_wider(mk)
+head(ehsa)
+```
+
+
+```{r}
+emerging <- ehsa %>%
+  arrange(sl, abs(tau)) %>%
+  slice(1:10)
+head(emerging)
+```
+
+```{r}
+ehsa <- emerging_hotspot_analysis(
+  x = GDPPC_st,
+  .var = "GDPPC",
+  k = 1,
+  nsim = 99
+)
+```
+
+```{r}
+ggplot(data = ehsa,
+       aes(x = classification)) +
+  geom_bar()
+```
+
+
+```{r}
+hunan_ehsa <- hunan %>%
+  left_join(ehsa, by = join_by(County == location))
+```
+
+```{r}
+ehsa_sig <- hunan_ehsa %>%
+  filter(p_value < 0.05)
+tmap_mode("plot")
+tm_shape(hunan_ehsa) +
+  tm_polygons() +
+  tm_borders(alpha = 0.5) +
+  tm_shape(ehsa_sig) +
+  tm_fill("classification") +
+  tm_borders(alpha = 0.4)
+```
