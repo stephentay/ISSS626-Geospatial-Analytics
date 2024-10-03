@@ -21,6 +21,7 @@ In this exercise, we will perform an **Emerging Hot Spot Analysis**, a spatio-te
 -	Categorising each study area location based on the trend’s z-score and p-value, along with the hot spot z-score and p-value.
 
 The `plotly` package enables the creation of interactive plots, allowing you to explore and monitor trends over time.
+The `Kendall` package is used for conducting Mann-Kendall trend tests.
 ```{r}
 pacman::p_load(sf, sfdep, tmap, plotly, tidyverse, Kendall)
 ```
@@ -37,10 +38,12 @@ In this in-class exercise, there’s no need to convert the Geographical Coordin
 ```{r}
 hunan <- st_read(dsn = "data/geospatial", 
                  layer = "Hunan") 
+glimpse(hunan)
 ```
 ## Hunan's GDPPC
 ```{r}
 GDPPC <- read_csv("data/aspatial/Hunan_GDPPC.csv")
+glimpse(GDPPC)
 ```
 :::
 
@@ -48,7 +51,7 @@ GDPPC <- read_csv("data/aspatial/Hunan_GDPPC.csv")
 `spacetime()` function of the `sfdep` package is used to create an spatio-temporal cube. In using the spacetime cube, **the space entity (e.g. administrative boundary or the hexagon) must remain constant over time**; only the attribute in the space entity changes over time.
 It is useful to verify that your object is a space-time cube object using the `is_spacetime_cube()` function.
 
-Note that your time field must be an integer (it cannot be real number, e.g. you may have to drop the time values in order to make it an integer time value.)
+Note that your time field must be an integer (it cannot be a real number, e.g. you may have to drop the time values in order to make it an integer time value.)
 ```{r}
 GDPPC_st <- spacetime(GDPPC, # attribute datafile
                       hunan, # geospatial datefile
@@ -59,14 +62,14 @@ is_spacetime_cube(GDPPC_st)
 ```
 
 # 3. Computing Gi*
-We are computing Gi* which includes self (Gi statistic does not include self).
-When computing Gi* over time, we need to `activate("geometry")`.
+We are computing local Gi* statistics which includes self (Gi statistic does not include self).
+When computing Gi* over time, we need to activate the geometry context using `activate("geometry")`.
 
 The code below identifies neighbours and derives inverse distance weights.
 
-We use `set_nbs()` and `set_wts()` to fix the rows as row order is very important in the analysis.
+We use `set_nbs()` and `set_wts()` to copy the "nb" and "wt" columns to each time slice. This dataset now has neighbours and weights for each time-slice.
 
-This dataset now has neighbours and weights for each time-slice.
+Do not rearrange the rows as row order is very important in the analysis.
 ```{r}
 GDPPC_nb <- GDPPC_st %>%
   activate("geometry") %>%
@@ -90,9 +93,24 @@ gi_star <- GDPPC_nb %>%
   tidyr::unnest(gi_star)
 ```
 
-4. MK test
-A confirmatory test to test whether there is a monotonic trend.
-To do MK test, you need to have at least 12 time periods. 
+# 4. Mann-Kendall Test
+The Mann-Kendall (MK) test is a statistical method used to confirm the presence of a monotonic trend in a time series. The hypotheses are as follows:
+
+- H0: No monotonic trend.
+- H1: A monotonic trend (increasing or decreasing) is present.
+
+We reject the null hypothesis if the p-value is smaller than the chosen alpha level. The tau value, which ranges from -1 to 1, indicates the direction and strength of the trend: 
+
+- -1 represents a perfectly decreasing trend
+- 1 signifies a perfectly increasing trend.
+
+To perform an MK test, at least 12 time periods of data are required.
+
+::: panel-tabset
+## Changsha example
+Using the computed local Gi* statistics, we can assess the trend at each location with the MK test. 
+
+Let’s take Changsha County as an example and plot its Gi* statistics from 2005 to 2021.
 ```{r}
 cbg <- gi_star %>%
   ungroup() %>%
@@ -106,7 +124,8 @@ ggplot(data = cbg, aes(x = Year, y = gi_star)) +
   theme_light()
 ```
 
-Interactive Mann-Kendall Plot
+## Changsha's interactive Mann-Kendall plot
+We can create an interactive MK plot using `ggplotly()` function from the `plotly` package.
 ```{r}
 p <- ggplot(data = cbg, aes(x = Year, y = gi_star)) +
   geom_line() +
@@ -115,8 +134,9 @@ p <- ggplot(data = cbg, aes(x = Year, y = gi_star)) +
 ggplotly(p)
 ```
 
-Mann-Kendall Test Report
+## Changsha's MK test report
 In the results, `sl` represents the p-value. Since the p-value is less than 0.05 and tau is greater than 0, we reject the null hypothesis, indicating a slight upward trend.
+
 ```{r}
 cbg %>%
   summarise(mk = list(
@@ -124,10 +144,10 @@ cbg %>%
       Kendall::MannKendall(gi_star)))) %>%
   tidyr::unnest_wider(mk)
 ```
-Mann-Kendall test dataframe
-We can perform the Mann-Kendall test for each location simultaneously by using `group_by(County)`.
+## Dataframe of MK test for each location
+We can perform the Mann-Kendall test for all locations simultaneously at once using `group_by(County)`.
 
-Some counties have statistical significance, while some do not. Some have positive trends, some have declining trends. 
+The resulting dataframe reveals that some counties exhibit statistically significant trends, while others do not. Additionally, some show positive trends, while others display a decline.
 ```{r}
 ehsa <- gi_star %>%
   group_by(County) %>%
@@ -138,13 +158,21 @@ ehsa <- gi_star %>%
 head(ehsa)
 ```
 
-
+## Sorting of dataframe
+We could sort the dataframe to show significant emerging hot/cold spots.
 ```{r}
 emerging <- ehsa %>%
   arrange(sl, abs(tau)) %>%
   slice(1:10)
 head(emerging)
 ```
+:::
+
+# 5. Emerging Hotspot Analysis
+
+::: panel-tabset
+## `emerging_hotspot_analysis()`
+Lastly, we perform Emerging Hot Spot Analysis (EHSA) using the `emerging_hotspot_analysis()` function from the `sfdep` package. For the `x` argument, we pass the spacetime object (e.g., GDPPC_st), and for `.var`, we specify the variable of interest (e.g., GDPPC). The `k` argument, which sets the number of time lags, defaults to 1. In the `nsim` argument, we define the number of simulations to run; setting it to 99, for example, results in 100 simulations.
 
 ```{r}
 ehsa <- emerging_hotspot_analysis(
@@ -155,13 +183,20 @@ ehsa <- emerging_hotspot_analysis(
 )
 ```
 
+## Visualising distribution of EHSA classes
+We can visualise the distribution of EHSA classes using a bar chart.
+
+Note that this is a basic plot and does not account for statistical significance. If significance were considered, non-statistically significant areas would fall into the “no pattern detected” category.
 ```{r}
 ggplot(data = ehsa,
        aes(x = classification)) +
   geom_bar()
 ```
 
+## EHSA choropleth map
+Before plotting the geographic distribution of EHSA classes, we need to join the `ehsa` dataframe with the `hunan` sf dataframe.
 
+Next, we use the `tmap` functions to create a categorical choropleth map.
 ```{r}
 hunan_ehsa <- hunan %>%
   left_join(ehsa, by = join_by(County == location))
@@ -178,3 +213,4 @@ tm_shape(hunan_ehsa) +
   tm_fill("classification") +
   tm_borders(alpha = 0.4)
 ```
+:::
