@@ -1,0 +1,1444 @@
+---
+title: "Take Home Ex 2: Spatial and Spatio-Temporal Analysis of COVID-19’s Impact on Thailand’s Tourism Economy"
+subtitle: ""
+author: "Stephen Tay"
+date: "13 Oct 2024"
+date-modified:  "last-modified"
+execute: 
+  eval: true
+  echo: true
+  message: false
+  warning: false
+  freeze: true 
+---
+
+# 1. Overview
+
+Tourism is a cornerstone of Thailand’s economy, contributing approximately 20% to the nation’s gross domestic product (GDP). In 2019, the country’s tourism sector generated USD 90 billion in revenue from both domestic and international visitors. However, the COVID-19 pandemic severely disrupted the industry, causing revenues to plummet to USD 24 billion in 2020 due to travel restrictions, lockdowns, and public health concerns.
+
+Since September 2021, tourism revenues have shown gradual recovery as international borders reopened and domestic travel resumed, yet the impacts of the pandemic have not been evenly distributed across the country. Provincial-level disparities in the recovery trajectory raise important questions about the spatial and spatio-temporal dynamics of Thailand’s tourism economy during and after the pandemic.
+
+## 1.1 Objectives
+
+This study employs spatial and spatio-temporal statistical methods at the provincial level to achieve the following objectives:
+
+- To determine whether key indicators of Thailand’s tourism economy exhibit spatial and spatio-temporal dependencies.
+- If such dependencies are present, to identify clusters, outliers, and emerging hot/cold spots.
+
+## 1.2 R Packages
+
+The following R packages are loaded for this study:
+
+```{r}
+pacman::p_load(sf, sfdep, spdep, Kendall, plotly, tmap, tidyverse, classInt)
+```
+
+# 2. Importing Dataset & Data Wrangling
+
+Two datasets were used in this study:
+
+- **Thailand Administrative Boundaries:** This dataset, obtained from [HDX] (https://data.humdata.org/dataset/cod-ab-tha?), provides boundary data at multiple administrative levels, including national (level 0), provincial (level 1), district (level 2), and sub-district (level 3). The dataset, updated in January 2022, offers geographic context for the analysis. For this study, only the provincial (level 1) boundaries were utilised.
+- **Thailand Tourism Statistics:** This dataset, sourced from [Kaggle] (https://www.kaggle.com/datasets/thaweewatboy/thailand-domestic-tourism-statistics), contains provincial tourism indicators which were extracted from Thailand’s Ministry of Tourism and Sports.
+
+## 2.1. Geospatial Data: Provincial Boundaries 
+The following steps were undertaken to import and prepare the geospatial data for analysis.
+
+::: panel-tabset
+### 1. Import and Data Overview
+From Take-Home Exercise 1, we learnt that tha_admbnda_adm1_rtsd_20220121 shapefile contains the multipolygon features of Thailand's provinces. We import this layer using `st_read()`. The output shows that the geometries are in WGS 84 geographical coordinate system.
+```{r}
+provinces <- st_read(dsn = "data/geospatial", 
+                  layer = "tha_admbnda_adm1_rtsd_20220121")
+```
+The sf dataframe contains a number of fields, of which only `ADM1_EN` and `geometry` are relevant to the study.
+```{r}
+glimpse(provinces)
+```
+### 2. Provincial Map Plot
+We use the `tmap` package to plot the provincial boundaries.
+```{r}
+tmap_mode('plot')
+tm_shape(provinces) +
+  tm_borders()
+```
+### 3. Data Wrangling & Transformation
+We use `select()` to select the two relevant fields: 
+
+- `ADM1_EN` renamed to `province`
+- `geometry`
+
+As the shapefile is in WGS geographical coordinate system, we use `st_transform()` to transform them to the projected coordinate system, EPSG 32647. We then use `st_centroid` to compute the centroid for each province.
+```{r}
+provinces2 <- provinces %>%
+  select("province" = "ADM1_EN", "geometry")  %>%
+  st_transform(crs = 32647) %>%
+  mutate(centroid = st_centroid(geometry))
+glimpse(provinces2)
+```
+A check on the Coordinate Reference System using `st_crs()` revealed that it is now in projected coordinate system.
+```{r}
+st_crs(provinces2)
+```
+### 4. Check Centroids within Land
+To ensure that all centroids are correctly positioned within the land area of each province, we use the `st_within()` function. This function checks whether each centroid falls within its corresponding provincial boundary. For each province, the output will be `TRUE` if the centroid is within the land and `FALSE` if it is not.
+
+We then apply `rowSums()` to count the number of `TRUE` values across all 77 provinces. A row sum of 1 indicates the centroid is within the land boundary, while any other value suggests an issue. Finally, we use `filter()` to identify any centroid that does not fall within the land boundary (i.e., cases where the row sum is not equal to 1).
+
+The output shows that all centroids fall within land.
+```{r}
+provinces2 %>%
+  mutate(centroid_within_land = rowSums(st_within(centroid, geometry, sparse = FALSE))) %>%
+  filter(centroid_within_land != 1)
+```
+### 5. Geovisualisation of Province Boundaries and Centroids
+The interactive plot below shows the provincial boundaries along with the computed centroids.
+```{r}
+tmap_mode('view')
+tm_shape(provinces2) +
+  tm_borders() +
+  tm_shape(st_sf(geometry = provinces2$centroid)) +
+  tm_dots(col = "red")
+tmap_mode('plot')
+```
+
+:::
+
+## 2.2 Aspatial Data: Tourism Statistics
+The following steps were undertaken to import, detect any data-related issues, and prepare the Thailand Tourism Statistics dataset for analysis. Additionally, Exploratory Data Analysis (EDA) was conducted to ensure the dataset’s robustness and suitability for the subsequent analysis.
+
+::: panel-tabset
+### 1. Import and Data Overview
+The `thailand_domestic_tourism_2019_2023_ver2.csv` file was imported using `read_csv()`. A preview of the dataset using `glimpse()` revealed that it contains 30,800 rows with 7 columns. The data is structured in long format, with all tourism economic indicators stored in the `variable` and `value` columns.
+```{r}
+tourism <- read_csv("data/aspatial/thailand_domestic_tourism_2019_2023_ver2.csv")
+glimpse(tourism)
+```
+### 2. Check Missing Data
+The combined use of `colMeans()` and `is.na()` functions was employed to check for any missing data. 
+The output shows that the dataset does not contain any missing data.
+```{r}
+colMeans(is.na(tourism))
+```
+
+### 3. Check for Mismatched Provincial Names
+We used `anti_join()` to identify any provincial names in the tourism dataset that did not match those in the geospatial dataset. The output revealed 8 unmatched provinces.
+```{r}
+tourism %>% 
+  anti_join(provinces2, by = c("province_eng" = "province")) %>% 
+  distinct(province_eng) %>% 
+  arrange(province_eng)
+```
+
+Next, we reversed the process by using `anti_join()` again to check for unmatched provincial names in the geospatial dataset compared to the tourism dataset. This also showed 8 unmatched provinces. The mismatches were due to differences in spelling, such as spaces in provincial names. This highlighted the need to correct the inconsistencies to ensure the datasets can be accurately joined later.
+```{r}
+provinces2 %>% 
+  anti_join(tourism, by = c("province" = "province_eng")) %>%
+  arrange(province)
+```
+
+### 4. Data Wrangling 1
+The following sub-steps were undertaken to transform the tourism dataset: 
+
+- Select the variables that are required in the study using `select()`. At the same time, we renamed province_eng to province.
+- Pivot the long table to a wide table using `spread()`. This will ensure each economic indicator would take up one column in the wide table structure.
+- Correct the 8 misspelt provinces to ensure consistency with the provincial names in the geospatial dataset. We use `mutate()` and `case_when()` to do so.
+
+```{r}
+tourism1 <- tourism %>%
+  select(c("date", "province" = "province_eng", "variable", "value")) %>%
+  spread(key = variable, value = value, fill = NA) %>%
+  mutate(province = case_when(province == "Buriram" ~ "Buri Ram",
+                              province == "Chainat" ~ "Chai Nat",
+                              province == "Chonburi" ~ "Chon Buri",
+                              province == "Lopburi" ~ "Lop Buri",
+                              province == "Nong Bua Lamphu" ~ "Nong Bua Lam Phu",
+                              province == "Phang Nga" ~ "Phangnga",
+                              province == "Prachinburi" ~ "Prachin Buri",
+                              province == "Sisaket" ~ "Si Sa Ket",
+                              TRUE ~ province))
+glimpse(tourism1)
+```
+
+```{r}
+colMeans(is.na(tourism1))
+```
+
+```{r}
+plot_ly(tourism1, x = ~date, y = ~no_tourist_all, color = ~province, type = 'scatter', mode = 'lines') %>%
+  layout(title = "Total Number of Tourists by Province (2019-2023)",
+         xaxis = list(title = "Month"),
+         yaxis = list(title = "Total Number of Tourists"))
+```
+
+```{r}
+plot_ly(tourism1, x = ~date, y = ~no_tourist_foreign, color = ~province, type = 'scatter', mode = 'lines') %>%
+  layout(title = "Number of Foreign Tourists by Province (2019-2023)",
+         xaxis = list(title = "Month"),
+         yaxis = list(title = "Number of Foreign Tourists"))
+```
+
+```{r}
+plot_ly(tourism1, x = ~date, y = ~no_tourist_thai, color = ~province, type = 'scatter', mode = 'lines') %>%
+  layout(title = "Number of Domestic Tourists by Province (2019-2023)",
+         xaxis = list(title = "Month"),
+         yaxis = list(title = "Number of Domestic Tourists"))
+```
+```{r}
+plot_ly(tourism1, x = ~date, y = ~no_tourist_stay, color = ~province, type = 'scatter', mode = 'lines') %>%
+  layout(title = "Number of Tourists with Travel Accommodation by Province (2019-2023)",
+         xaxis = list(title = "Month"),
+         yaxis = list(title = "Number of Tourists with Travel Accommodation"))
+```
+
+```{r}
+plot_ly(tourism1, x = ~date, y = ~ratio_tourist_stay, color = ~province, type = 'scatter', mode = 'lines') %>%
+  layout(title = "Occupancy Rate by Province (2019-2023)",
+         xaxis = list(title = "Month"),
+         yaxis = list(title = "Occupancy Rate (%)"))
+```
+
+```{r}
+plot_ly(tourism1, x = ~date, y = ~revenue_all, color = ~province, type = 'scatter', mode = 'lines') %>%
+  layout(title = "Total Tourism Revenue by Province (2019-2023)",
+         xaxis = list(title = "Month"),
+         yaxis = list(title = "Total Tourism Revenue"))
+```
+
+```{r}
+plot_ly(tourism1, x = ~date, y = ~revenue_foreign, color = ~province, type = 'scatter', mode = 'lines') %>%
+  layout(title = "Revenue Generated by Foreign Tourists by Province (2019-2023)",
+         xaxis = list(title = "Month"),
+         yaxis = list(title = "Revenue Generated by Foreign Tourists"))
+```
+```{r}
+plot_ly(tourism1, x = ~date, y = ~revenue_thai, color = ~province, type = 'scatter', mode = 'lines') %>%
+  layout(title = "Revenue Generated by Domestic Tourists by Province (2019-2023)",
+         xaxis = list(title = "Month"),
+         yaxis = list(title = "Revenue Generated by Domestic Tourists"))
+```
+
+
+```{r}
+tourism2 <- tourism1 %>%
+  mutate(percentage_foreign = no_tourist_foreign / no_tourist_all,
+         revenue_per_tourist = revenue_all / no_tourist_all,
+         percentage_foreign = replace_na(percentage_foreign, 0),
+         revenue_per_tourist = replace_na(revenue_per_tourist, 0)) %>%
+  select(c("date", "province", "no_tourist_all", "no_tourist_foreign", "percentage_foreign", "occupancy_rate" = "ratio_tourist_stay", "revenue_all", "revenue_per_tourist"))
+glimpse(tourism2)
+```
+```{r}
+colMeans(is.na(tourism2))
+```
+
+
+```{r}
+plot_ly(tourism2, x = ~date, y = ~percentage_foreign, color = ~province, type = 'scatter', mode = 'lines') %>%
+  layout(title = "% Tourists who are Foreigners by Province (2019-2023)",
+         xaxis = list(title = "Month"),
+         yaxis = list(title = "% Tourists who are Foreigners"))
+```
+```{r}
+plot_ly(tourism2, x = ~date, y = ~revenue_per_tourist, color = ~province, type = 'scatter', mode = 'lines') %>%
+  layout(title = "Revenue per Tourist by Province (2019-2023)",
+         xaxis = list(title = "Month"),
+         yaxis = list(title = "Revenue per Tourist"))
+```
+
+## 3. Aggregated by Time Period, Combinding Dataset
+https://en.wikipedia.org/wiki/COVID-19_pandemic_in_Thailand
+Prior to January 2020, there were no significant impacts of COVID-19 in Thailand, as the virus had not yet spread globally. Normal economic and social activities continued until late 2019.
+Starting 1 May 2022, fully-vaccinated travellers will NOT require RT-PCR on arrival but still need Thailand Pass. ATK is voluntary only.
+
+```{r}
+tourism_period <- tourism2 %>%
+  mutate(period = case_when(date <= ymd("2019-12-01") ~ "Pre-covid",
+                            date >= ymd("2022-05-01") ~ "Post-covid",
+                            TRUE ~ "Covid")) %>%
+  group_by(period, province) %>%
+  summarise(avg_no_tourist_all = mean(no_tourist_all),
+            avg_percentage_foreign = sum(no_tourist_foreign) / sum(no_tourist_all),
+            avg_occupancy_rate = mean(occupancy_rate),
+            avg_revenue_all = mean(revenue_all),
+            avg_revenue_per_tourist = sum(revenue_all) / sum(no_tourist_all)) %>%
+  ungroup()
+glimpse(tourism_period)
+```
+
+
+```{r}
+province_tourism_period <- provinces2 %>%
+  left_join(tourism_period, by = "province") 
+glimpse(province_tourism_period)
+```
+
+
+# 3. Choropleth Map
+```{r}
+breaks <- province_tourism_period %>%
+  pull(avg_no_tourist_all) %>% 
+  classIntervals(n = 6, style = "jenks") %>%
+  .$brks
+variable_of_interest <- "avg_no_tourist_all"
+legend_title <- "Number of Tourists"
+
+tmap_mode('plot')
+pre_covid_map <- province_tourism_period %>%
+  filter(period == "Pre-covid") %>%
+  tm_shape() +
+  tm_fill(variable_of_interest, breaks = breaks, palette = "Blues", title = legend_title) +
+  tm_layout(main.title = "Pre-covid",
+            main.title.position = "center",
+            main.title.size = 1.2,
+            legend.height = 0.4,
+            legend.width = 0.35,
+            frame = TRUE) +
+  tm_borders(alpha = 0.5)
+covid_map <- province_tourism_period %>%
+  filter(period == "Covid") %>%
+  tm_shape() +
+  tm_fill(variable_of_interest, breaks = breaks, palette = "Blues", title = legend_title) +
+  tm_layout(main.title = "Covid",
+            main.title.position = "center",
+            main.title.size = 1.2,
+            legend.height = 0.4,
+            legend.width = 0.35,
+            frame = TRUE) +
+  tm_borders(alpha = 0.5)
+post_covid_map <- province_tourism_period %>%
+  filter(period == "Post-covid") %>%
+  tm_shape() +
+  tm_fill(variable_of_interest, breaks = breaks, palette = "Blues", title = legend_title) +
+  tm_layout(main.title = "Post-covid",
+            main.title.position = "center",
+            main.title.size = 1.2,
+            legend.height = 0.4,
+            legend.width = 0.35,
+            frame = TRUE) +
+  tm_borders(alpha = 0.5)
+
+tmap_arrange(pre_covid_map, covid_map, post_covid_map, 
+             asp = NA, ncol = 3)
+```
+
+
+
+```{r}
+breaks <- province_tourism_period %>%
+  pull(avg_percentage_foreign) %>% 
+  classIntervals(n = 6, style = "jenks") %>%
+  .$brks
+variable_of_interest <- "avg_percentage_foreign"
+legend_title <- "% Tourists who are Foreigners"
+
+tmap_mode('plot')
+pre_covid_map <- province_tourism_period %>%
+  filter(period == "Pre-covid") %>%
+  tm_shape() +
+  tm_fill(variable_of_interest, breaks = breaks, palette = "Blues", title = legend_title) +
+  tm_layout(main.title = "Pre-covid",
+            main.title.position = "center",
+            main.title.size = 1.2,
+            legend.height = 0.4,
+            legend.width = 0.35,
+            frame = TRUE) +
+  tm_borders(alpha = 0.5)
+covid_map <- province_tourism_period %>%
+  filter(period == "Covid") %>%
+  tm_shape() +
+  tm_fill(variable_of_interest, breaks = breaks, palette = "Blues", title = legend_title) +
+  tm_layout(main.title = "Covid",
+            main.title.position = "center",
+            main.title.size = 1.2,
+            legend.height = 0.4,
+            legend.width = 0.35,
+            frame = TRUE) +
+  tm_borders(alpha = 0.5)
+post_covid_map <- province_tourism_period %>%
+  filter(period == "Post-covid") %>%
+  tm_shape() +
+  tm_fill(variable_of_interest, breaks = breaks, palette = "Blues", title = legend_title) +
+  tm_layout(main.title = "Post-covid",
+            main.title.position = "center",
+            main.title.size = 1.2,
+            legend.height = 0.4,
+            legend.width = 0.35,
+            frame = TRUE) +
+  tm_borders(alpha = 0.5)
+
+tmap_arrange(pre_covid_map, covid_map, post_covid_map, 
+             asp = NA, ncol = 3)
+```
+
+```{r}
+breaks <- province_tourism_period %>%
+  pull(avg_occupancy_rate) %>% 
+  classIntervals(n = 6, style = "jenks") %>%
+  .$brks
+variable_of_interest <- "avg_occupancy_rate"
+legend_title <- "Occupancy Rate"
+
+tmap_mode('plot')
+pre_covid_map <- province_tourism_period %>%
+  filter(period == "Pre-covid") %>%
+  tm_shape() +
+  tm_fill(variable_of_interest, breaks = breaks, palette = "Blues", title = legend_title) +
+  tm_layout(main.title = "Pre-covid",
+            main.title.position = "center",
+            main.title.size = 1.2,
+            legend.height = 0.4,
+            legend.width = 0.35,
+            frame = TRUE) +
+  tm_borders(alpha = 0.5)
+covid_map <- province_tourism_period %>%
+  filter(period == "Covid") %>%
+  tm_shape() +
+  tm_fill(variable_of_interest, breaks = breaks, palette = "Blues", title = legend_title) +
+  tm_layout(main.title = "Covid",
+            main.title.position = "center",
+            main.title.size = 1.2,
+            legend.height = 0.4,
+            legend.width = 0.35,
+            frame = TRUE) +
+  tm_borders(alpha = 0.5)
+post_covid_map <- province_tourism_period %>%
+  filter(period == "Post-covid") %>%
+  tm_shape() +
+  tm_fill(variable_of_interest, breaks = breaks, palette = "Blues", title = legend_title) +
+  tm_layout(main.title = "Post-covid",
+            main.title.position = "center",
+            main.title.size = 1.2,
+            legend.height = 0.4,
+            legend.width = 0.35,
+            frame = TRUE) +
+  tm_borders(alpha = 0.5)
+
+tmap_arrange(pre_covid_map, covid_map, post_covid_map, 
+             asp = NA, ncol = 3)
+```
+
+```{r}
+breaks <- province_tourism_period %>%
+  pull(avg_revenue_all) %>% 
+  classIntervals(n = 6, style = "jenks") %>%
+  .$brks
+variable_of_interest <- "avg_revenue_all"
+legend_title <- "Total Revenue"
+
+tmap_mode('plot')
+pre_covid_map <- province_tourism_period %>%
+  filter(period == "Pre-covid") %>%
+  tm_shape() +
+  tm_fill(variable_of_interest, breaks = breaks, palette = "Blues", title = legend_title) +
+  tm_layout(main.title = "Pre-covid",
+            main.title.position = "center",
+            main.title.size = 1.2,
+            legend.height = 0.4,
+            legend.width = 0.35,
+            frame = TRUE) +
+  tm_borders(alpha = 0.5)
+covid_map <- province_tourism_period %>%
+  filter(period == "Covid") %>%
+  tm_shape() +
+  tm_fill(variable_of_interest, breaks = breaks, palette = "Blues", title = legend_title) +
+  tm_layout(main.title = "Covid",
+            main.title.position = "center",
+            main.title.size = 1.2,
+            legend.height = 0.4,
+            legend.width = 0.35,
+            frame = TRUE) +
+  tm_borders(alpha = 0.5)
+post_covid_map <- province_tourism_period %>%
+  filter(period == "Post-covid") %>%
+  tm_shape() +
+  tm_fill(variable_of_interest, breaks = breaks, palette = "Blues", title = legend_title) +
+  tm_layout(main.title = "Post-covid",
+            main.title.position = "center",
+            main.title.size = 1.2,
+            legend.height = 0.4,
+            legend.width = 0.35,
+            frame = TRUE) +
+  tm_borders(alpha = 0.5)
+
+tmap_arrange(pre_covid_map, covid_map, post_covid_map, 
+             asp = NA, ncol = 3)
+```
+
+```{r}
+breaks <- province_tourism_period %>%
+  pull(avg_revenue_per_tourist) %>% 
+  classIntervals(n = 6, style = "jenks") %>%
+  .$brks
+variable_of_interest <- "avg_revenue_per_tourist"
+legend_title <- "Average Revenue per Tourist"
+
+tmap_mode('plot')
+pre_covid_map <- province_tourism_period %>%
+  filter(period == "Pre-covid") %>%
+  tm_shape() +
+  tm_fill(variable_of_interest, breaks = breaks, palette = "Blues", title = legend_title) +
+  tm_layout(main.title = "Pre-covid",
+            main.title.position = "center",
+            main.title.size = 1.2,
+            legend.height = 0.4,
+            legend.width = 0.35,
+            frame = TRUE) +
+  tm_borders(alpha = 0.5)
+covid_map <- province_tourism_period %>%
+  filter(period == "Covid") %>%
+  tm_shape() +
+  tm_fill(variable_of_interest, breaks = breaks, palette = "Blues", title = legend_title) +
+  tm_layout(main.title = "Covid",
+            main.title.position = "center",
+            main.title.size = 1.2,
+            legend.height = 0.4,
+            legend.width = 0.35,
+            frame = TRUE) +
+  tm_borders(alpha = 0.5)
+post_covid_map <- province_tourism_period %>%
+  filter(period == "Post-covid") %>%
+  tm_shape() +
+  tm_fill(variable_of_interest, breaks = breaks, palette = "Blues", title = legend_title) +
+  tm_layout(main.title = "Post-covid",
+            main.title.position = "center",
+            main.title.size = 1.2,
+            legend.height = 0.4,
+            legend.width = 0.35,
+            frame = TRUE) +
+  tm_borders(alpha = 0.5)
+
+tmap_arrange(pre_covid_map, covid_map, post_covid_map, 
+             asp = NA, ncol = 3)
+```
+
+# 4. Method to Identify Neighbours
+```{r}
+province_tourism_pre <- province_tourism_period %>%
+  filter(period == "Pre-covid")
+glimpse(province_tourism_pre)
+```
+## Queen's
+```{r}
+wm_q <- poly2nb(province_tourism_pre, queen=TRUE)
+summary(wm_q)
+```
+
+```{r}
+plot(province_tourism_pre$geometry, border="lightgrey")
+plot(wm_q, province_tourism_pre$centroid, pch = 19, cex = 0.6, add = TRUE, col= "red")
+```
+
+## Fixed distance weight matrix
+```{r}
+coords <- province_tourism_pre %>% 
+  pull(centroid)
+
+first_nearest_neighbour <- knn2nb(knearneigh(coords))
+first_nearest_neighbour_distance <- unlist(nbdists(first_nearest_neighbour, coords))
+summary(first_nearest_neighbour_distance)
+```
+
+```{r}
+wm_fixed_d <- dnearneigh(coords, 0, 110000)
+summary(wm_fixed_d)
+```
+
+```{r}
+plot(province_tourism_pre$geometry, border="lightgrey")
+plot(wm_fixed_d, coords, add=TRUE)
+plot(first_nearest_neighbour, coords, add=TRUE, col="red", length=0.08)
+```
+## Adaptive distance weight
+```{r}
+wm_adapt_d <- province_tourism_pre %>%
+  mutate(nb = st_knn(centroid, k = 4),
+         wt = st_inverse_distance(nb, centroid, scale = 1, alpha =1),
+         .before = "geometry")
+glimpse(wm_adapt_d)
+```
+
+```{r}
+plot(wm_adapt_d$geometry, border="lightgrey")
+plot(wm_adapt_d$nb, wm_adapt_d$centroid, pch = 19, cex = 0.6, add = TRUE, col = "red")
+```
+
+# 5. Global Tests
+In this report, I employed the Global Moran’s I permutation test (global_moran_perm) to assess spatial autocorrelation. While both the standard Moran’s I test (global_moran_test) and the permutation test evaluate the same hypothesis, the permutation method is more robust. It generates an empirical distribution through multiple simulations, making it less reliant on assumptions about the underlying data distribution. This approach is widely accepted in spatial analysis as it provides more reliable p-values, especially when working with small datasets or when the normality assumption is questionable. Therefore, the standard Moran’s I test was omitted to avoid redundancy, as the permutation test offers superior statistical inference.
+
+## 5.1 Total Number of Tourists
+```{r}
+set.seed(1234)
+global_moran_perm(wm_adapt_d$avg_no_tourist_all, wm_adapt_d$nb, wm_adapt_d$wt, nsim = 999)
+```
+```{r}
+set.seed(1234)
+global_c_perm(wm_adapt_d$avg_no_tourist_all, wm_adapt_d$nb, wm_adapt_d$wt, nsim = 999)
+```
+
+## 5.2 Percentage of Foreign Tourists
+```{r}
+set.seed(1234)
+global_moran_perm(wm_adapt_d$avg_percentage_foreign, wm_adapt_d$nb, wm_adapt_d$wt, nsim = 999)
+```
+
+```{r}
+set.seed(1234)
+global_c_perm(wm_adapt_d$avg_percentage_foreign, wm_adapt_d$nb, wm_adapt_d$wt, nsim = 999)
+```
+
+## 5.3 Occupancy Rate
+```{r}
+set.seed(1234)
+global_moran_perm(wm_adapt_d$avg_occupancy_rate, wm_adapt_d$nb, wm_adapt_d$wt, nsim = 999)
+```
+
+```{r}
+set.seed(1234)
+global_c_perm(wm_adapt_d$avg_occupancy_rate, wm_adapt_d$nb, wm_adapt_d$wt, nsim = 999)
+```
+
+## 5.4 Total Revenue
+```{r}
+set.seed(1234)
+global_moran_perm(wm_adapt_d$avg_revenue_all, wm_adapt_d$nb, wm_adapt_d$wt, nsim = 999)
+```
+
+```{r}
+set.seed(1234)
+global_c_perm(wm_adapt_d$avg_revenue_all, wm_adapt_d$nb, wm_adapt_d$wt, nsim = 999)
+```
+
+## 5.5 Average Revenue per Tourist
+```{r}
+set.seed(1234)
+global_moran_perm(wm_adapt_d$avg_revenue_per_tourist, wm_adapt_d$nb, wm_adapt_d$wt, nsim = 999)
+```
+
+```{r}
+set.seed(1234)
+global_c_perm(wm_adapt_d$avg_revenue_per_tourist, wm_adapt_d$nb, wm_adapt_d$wt, nsim = 999)
+```
+
+# 6. Local Tests: Moran's I and LISA
+```{r}
+set.seed(1234)
+lisa_total_tourist <- wm_adapt_d %>%
+  mutate(local_moran = local_moran(avg_no_tourist_all, nb, wt, nsim = 999),
+         .before = 1) %>%
+  unnest(local_moran) %>%
+  mutate(quadrant = case_when(p_ii_sim >= 0.05 ~ "n.s",
+                              TRUE ~ mean))
+```
+
+```{r}
+map1 <- tm_shape(lisa_total_tourist) +
+  tm_fill("ii", title = "Moran's I") +
+  tm_borders(alpha = 0.5) +
+  tm_view(set.zoom.limits = c(6,8)) +
+  tm_layout(main.title = "Local Moran's I of Total Number of Tourists",
+            main.title.size = 1)
+
+map2 <- tm_shape(lisa_total_tourist) +
+  tm_fill("p_ii_sim",
+          title = "p value  (permutation test)",
+          palette = c("0.001" = "#9e6700",
+                      "0.01" = "#c69554",
+                      "0.05" = "#eac59a",
+                      "n.s" = "#FFFFFF"),
+          breaks = c(0, 0.001, 0.01, 0.05, 1),
+          labels = c("0.001", "0.01", "0.05", "n.s")) +
+  tm_borders(alpha = 0.5) +
+  tm_layout(main.title = "p-value of Local Moran's I",
+            main.title.size = 1)
+
+map3 <- tm_shape(lisa_total_tourist) +
+  tm_fill("quadrant",
+          title = "LISA Quadrant",
+          palette = c("High-High" = "#B22222",
+                      "Low-High" = "#c1b6ec",
+                      "Low-Low" = "#2c7bb6",
+                      "High-Low" = "#f6b1b3", 
+                      "n.s" = "#FFFFFF")) +
+  tm_borders(alpha = 0.5) +
+  tm_layout(main.title = "LISA Map",
+            main.title.size = 1)
+
+tmap_arrange(map1, map2, map3, ncol=3)
+```
+
+```{r}
+set.seed(1234)
+lisa_pct_foreign <- wm_adapt_d %>%
+  mutate(local_moran = local_moran(avg_percentage_foreign, nb, wt, nsim = 999),
+         .before = 1) %>%
+  unnest(local_moran) %>%
+  mutate(quadrant = case_when(p_ii_sim >= 0.05 ~ "n.s",
+                              TRUE ~ mean))
+```
+
+```{r}
+map1 <- tm_shape(lisa_pct_foreign) +
+  tm_fill("ii", title = "Moran's I") +
+  tm_borders(alpha = 0.5) +
+  tm_view(set.zoom.limits = c(6,8)) +
+  tm_layout(main.title = "Local Moran's I of Percentage of Foreign Tourists",
+            main.title.size = 1)
+
+map2 <- tm_shape(lisa_pct_foreign) +
+  tm_fill("p_ii_sim",
+          title = "p value  (permutation test)",
+          palette = c("0.001" = "#9e6700",
+                      "0.01" = "#c69554",
+                      "0.05" = "#eac59a",
+                      "n.s" = "#FFFFFF"),
+          breaks = c(0, 0.001, 0.01, 0.05, 1),
+          labels = c("0.001", "0.01", "0.05", "n.s")) +
+  tm_borders(alpha = 0.5) +
+  tm_layout(main.title = "p-value of Local Moran's I",
+            main.title.size = 1)
+
+map3 <- tm_shape(lisa_pct_foreign) +
+  tm_fill("quadrant",
+          title = "LISA Quadrant",
+          palette = c("High-High" = "#B22222",
+                      "Low-High" = "#c1b6ec",
+                      "Low-Low" = "#2c7bb6",
+                      "High-Low" = "#f6b1b3",
+                      "n.s" = "#FFFFFF")) +
+  tm_borders(alpha = 0.5) +
+  tm_layout(main.title = "LISA Map",
+            main.title.size = 1)
+
+tmap_arrange(map1, map2, map3, ncol=3)
+```
+
+```{r}
+set.seed(1234)
+lisa_occupancy_rate <- wm_adapt_d %>%
+  mutate(local_moran = local_moran(avg_occupancy_rate, nb, wt, nsim = 999),
+         .before = 1) %>%
+  unnest(local_moran) %>%
+  mutate(quadrant = case_when(p_ii_sim >= 0.05 ~ "n.s",
+                              TRUE ~ mean))
+```
+
+```{r}
+map1 <- tm_shape(lisa_occupancy_rate) +
+  tm_fill("ii", title = "Moran's I") +
+  tm_borders(alpha = 0.5) +
+  tm_view(set.zoom.limits = c(6,8)) +
+  tm_layout(main.title = "Local Moran's I of Occupancy Rate",
+            main.title.size = 1)
+
+map2 <- tm_shape(lisa_occupancy_rate) +
+  tm_fill("p_ii_sim",
+          title = "p value  (permutation test)",
+          palette = c("0.001" = "#9e6700",
+                      "0.01" = "#c69554",
+                      "0.05" = "#eac59a",
+                      "n.s" = "#FFFFFF"),
+          breaks = c(0, 0.001, 0.01, 0.05, 1),
+          labels = c("0.001", "0.01", "0.05", "n.s")) +
+  tm_borders(alpha = 0.5) +
+  tm_layout(main.title = "p-value of Local Moran's I",
+            main.title.size = 1)
+
+map3 <- tm_shape(lisa_occupancy_rate) +
+  tm_fill("quadrant",
+          title = "LISA Quadrant",
+          palette = c("High-High" = "#B22222",
+                      "Low-High" = "#c1b6ec",
+                      "Low-Low" = "#2c7bb6",
+                      "High-Low" = "#f6b1b3",
+                      "n.s" = "#FFFFFF")) +
+  tm_borders(alpha = 0.5) +
+  tm_layout(main.title = "LISA Map",
+            main.title.size = 1)
+
+tmap_arrange(map1, map2, map3, ncol=3)
+```
+
+```{r}
+set.seed(1234)
+lisa_revenue <- wm_adapt_d %>%
+  mutate(local_moran = local_moran(avg_revenue_all, nb, wt, nsim = 999),
+         .before = 1) %>%
+  unnest(local_moran) %>%
+  mutate(quadrant = case_when(p_ii_sim >= 0.05 ~ "n.s",
+                              TRUE ~ mean))
+```
+
+```{r}
+map1 <- tm_shape(lisa_revenue) +
+  tm_fill("ii", title = "Moran's I") +
+  tm_borders(alpha = 0.5) +
+  tm_view(set.zoom.limits = c(6,8)) +
+  tm_layout(main.title = "Local Moran's I of Total Revenue",
+            main.title.size = 1)
+
+map2 <- tm_shape(lisa_revenue) +
+  tm_fill("p_ii_sim",
+          title = "p value  (permutation test)",
+          palette = c("0.001" = "#9e6700",
+                      "0.01" = "#c69554",
+                      "0.05" = "#eac59a",
+                      "n.s" = "#FFFFFF"),
+          breaks = c(0, 0.001, 0.01, 0.05, 1),
+          labels = c("0.001", "0.01", "0.05", "n.s")) +
+  tm_borders(alpha = 0.5) +
+  tm_layout(main.title = "p-value of Local Moran's I",
+            main.title.size = 1)
+
+map3 <- tm_shape(lisa_revenue) +
+  tm_fill("quadrant",
+          title = "LISA Quadrant",
+          palette = c("High-High" = "#B22222",
+                      "Low-High" = "#c1b6ec",
+                      "Low-Low" = "#2c7bb6",
+                      "High-Low" = "#f6b1b3",
+                      "n.s" = "#FFFFFF")) +
+  tm_borders(alpha = 0.5) +
+  tm_layout(main.title = "LISA Map",
+            main.title.size = 1)
+
+tmap_arrange(map1, map2, map3, ncol=3)
+```
+
+```{r}
+set.seed(1234)
+lisa_revenue_per_tourist <- wm_adapt_d %>%
+  mutate(local_moran = local_moran(avg_revenue_per_tourist, nb, wt, nsim = 999),
+         .before = 1) %>%
+  unnest(local_moran) %>%
+  mutate(quadrant = case_when(p_ii_sim >= 0.05 ~ "n.s",
+                              TRUE ~ mean))
+```
+
+```{r}
+map1 <- tm_shape(lisa_revenue_per_tourist) +
+  tm_fill("ii", title = "Moran's I") +
+  tm_borders(alpha = 0.5) +
+  tm_view(set.zoom.limits = c(6,8)) +
+  tm_layout(main.title = "Local Moran's I of Avg Revenue Per Tourist",
+            main.title.size = 1)
+
+map2 <- tm_shape(lisa_revenue_per_tourist) +
+  tm_fill("p_ii_sim",
+          title = "p value  (permutation test)",
+          palette = c("0.001" = "#9e6700",
+                      "0.01" = "#c69554",
+                      "0.05" = "#eac59a",
+                      "n.s" = "#FFFFFF"),
+          breaks = c(0, 0.001, 0.01, 0.05, 1),
+          labels = c("0.001", "0.01", "0.05", "n.s")) +
+  tm_borders(alpha = 0.5) +
+  tm_layout(main.title = "p-value of Local Moran's I",
+            main.title.size = 1)
+
+map3 <- tm_shape(lisa_revenue_per_tourist) +
+  tm_fill("quadrant",
+          title = "LISA Quadrant",
+          palette = c("High-High" = "#B22222",
+                      "Low-High" = "#c1b6ec",
+                      "Low-Low" = "#2c7bb6",
+                      "High-Low" = "#f6b1b3",
+                      "n.s" = "#FFFFFF")) +
+  tm_borders(alpha = 0.5) +
+  tm_layout(main.title = "LISA Map",
+            main.title.size = 1)
+
+tmap_arrange(map1, map2, map3, ncol=3)
+```
+# 7. Gi test and hot/cold spot analysis
+```{r}
+set.seed(1234)
+HCSA_total_tourist <- wm_adapt_d %>%
+  mutate(local_Gi = local_g_perm(avg_no_tourist_all, nb, wt, nsim = 999),
+         .before = 1) %>%
+  unnest(local_Gi) %>%
+  mutate(hcsa = factor(case_when(p_sim >= 0.05 ~ "n.s",
+                                 TRUE ~ cluster),
+                       levels = c("High", "Low", "n.s")))
+```
+
+```{r}
+map1 <- tm_shape(HCSA_total_tourist) +
+  tm_fill("gi", title = "Local Gi") +
+  tm_borders(alpha = 0.5) +
+  tm_view(set.zoom.limits = c(6,8)) +
+  tm_layout(main.title = "Local Gi of Total Number of Tourists",
+            main.title.size = 1)
+
+map2 <- tm_shape(HCSA_total_tourist) +
+  tm_fill("p_sim",
+          title = "p value  (permutation test)",
+          palette = c("0.001" = "#9e6700",
+                      "0.01" = "#c69554",
+                      "0.05" = "#eac59a",
+                      "n.s" = "#FFFFFF"),
+          breaks = c(0, 0.001, 0.01, 0.05, 1),
+          labels = c("0.001", "0.01", "0.05", "n.s")) +
+  tm_borders(alpha = 0.5) +
+  tm_layout(main.title = "p-value of Local Gi",
+            main.title.size = 1)
+
+map3 <- tm_shape(HCSA_total_tourist) +
+  tm_fill("hcsa",
+          title = "Hot/Cold Spots",
+          palette = c("High" = "#B22222",
+                      "Low" = "#2c7bb6",
+                      "n.s" = "#FFFFFF")) +
+  tm_borders(alpha = 0.5) +
+  tm_layout(main.title = "Hot/Cold Spot Analysis",
+            main.title.size = 1)
+
+tmap_arrange(map1, map2, map3, ncol=3)
+```
+
+```{r}
+set.seed(1234)
+HCSA_pct_foreign <- wm_adapt_d %>%
+  mutate(local_Gi = local_g_perm(avg_percentage_foreign, nb, wt, nsim = 999),
+         .before = 1) %>%
+  unnest(local_Gi) %>%
+  mutate(hcsa = factor(case_when(p_sim >= 0.05 ~ "n.s",
+                                 TRUE ~ cluster),
+                       levels = c("High", "Low", "n.s")))
+```
+
+```{r}
+map1 <- tm_shape(HCSA_pct_foreign) +
+  tm_fill("gi", title = "Local Gi") +
+  tm_borders(alpha = 0.5) +
+  tm_view(set.zoom.limits = c(6,8)) +
+  tm_layout(main.title = "Local Gi of Percentage of Foreign Tourists",
+            main.title.size = 1)
+
+map2 <- tm_shape(HCSA_pct_foreign) +
+  tm_fill("p_sim",
+          title = "p value  (permutation test)",
+          palette = c("0.001" = "#9e6700",
+                      "0.01" = "#c69554",
+                      "0.05" = "#eac59a",
+                      "n.s" = "#FFFFFF"),
+          breaks = c(0, 0.001, 0.01, 0.05, 1),
+          labels = c("0.001", "0.01", "0.05", "n.s")) +
+  tm_borders(alpha = 0.5) +
+  tm_layout(main.title = "p-value of Local Gi",
+            main.title.size = 1)
+
+map3 <- tm_shape(HCSA_pct_foreign) +
+  tm_fill("hcsa",
+          title = "Hot/Cold Spots",
+          palette = c("High" = "#B22222",
+                      "Low" = "#2c7bb6",
+                      "n.s" = "#FFFFFF")) +
+  tm_borders(alpha = 0.5) +
+  tm_layout(main.title = "Hot/Cold Spot Analysis",
+            main.title.size = 1)
+
+tmap_arrange(map1, map2, map3, ncol=3)
+```
+
+```{r}
+set.seed(1234)
+HCSA_occupancy_rate <- wm_adapt_d %>%
+  mutate(local_Gi = local_g_perm(avg_occupancy_rate, nb, wt, nsim = 999),
+         .before = 1) %>%
+  unnest(local_Gi) %>%
+  mutate(hcsa = factor(case_when(p_sim >= 0.05 ~ "n.s",
+                                 TRUE ~ cluster),
+                       levels = c("High", "Low", "n.s")))
+```
+
+```{r}
+map1 <- tm_shape(HCSA_occupancy_rate) +
+  tm_fill("gi", title = "Local Gi") +
+  tm_borders(alpha = 0.5) +
+  tm_view(set.zoom.limits = c(6,8)) +
+  tm_layout(main.title = "Local Gi of Occupancy Rate",
+            main.title.size = 1)
+
+map2 <- tm_shape(HCSA_occupancy_rate) +
+  tm_fill("p_sim",
+          title = "p value  (permutation test)",
+          palette = c("0.001" = "#9e6700",
+                      "0.01" = "#c69554",
+                      "0.05" = "#eac59a",
+                      "n.s" = "#FFFFFF"),
+          breaks = c(0, 0.001, 0.01, 0.05, 1),
+          labels = c("0.001", "0.01", "0.05", "n.s")) +
+  tm_borders(alpha = 0.5) +
+  tm_layout(main.title = "p-value of Local Gi",
+            main.title.size = 1)
+
+map3 <- tm_shape(HCSA_occupancy_rate) +
+  tm_fill("hcsa",
+          title = "Hot/Cold Spots",
+          palette = c("High" = "#B22222",
+                      "Low" = "#2c7bb6",
+                      "n.s" = "#FFFFFF")) +
+  tm_borders(alpha = 0.5) +
+  tm_layout(main.title = "Hot/Cold Spot Analysis",
+            main.title.size = 1)
+
+tmap_arrange(map1, map2, map3, ncol=3)
+```
+
+```{r}
+set.seed(1234)
+HCSA_revenue <- wm_adapt_d %>%
+  mutate(local_Gi = local_g_perm(avg_revenue_all, nb, wt, nsim = 999),
+         .before = 1) %>%
+  unnest(local_Gi) %>%
+  mutate(hcsa = factor(case_when(p_sim >= 0.05 ~ "n.s",
+                                 TRUE ~ cluster),
+                       levels = c("High", "Low", "n.s")))
+```
+
+```{r}
+map1 <- tm_shape(HCSA_revenue) +
+  tm_fill("gi", title = "Local Gi") +
+  tm_borders(alpha = 0.5) +
+  tm_view(set.zoom.limits = c(6,8)) +
+  tm_layout(main.title = "Local Gi of Total Revenue",
+            main.title.size = 1)
+
+map2 <- tm_shape(HCSA_revenue) +
+  tm_fill("p_sim",
+          title = "p value  (permutation test)",
+          palette = c("0.001" = "#9e6700",
+                      "0.01" = "#c69554",
+                      "0.05" = "#eac59a",
+                      "n.s" = "#FFFFFF"),
+          breaks = c(0, 0.001, 0.01, 0.05, 1),
+          labels = c("0.001", "0.01", "0.05", "n.s")) +
+  tm_borders(alpha = 0.5) +
+  tm_layout(main.title = "p-value of Local Gi",
+            main.title.size = 1)
+
+map3 <- tm_shape(HCSA_revenue) +
+  tm_fill("hcsa",
+          title = "Hot/Cold Spots",
+          palette = c("High" = "#B22222",
+                      "Low" = "#2c7bb6",
+                      "n.s" = "#FFFFFF")) +
+  tm_borders(alpha = 0.5) +
+  tm_layout(main.title = "Hot/Cold Spot Analysis",
+            main.title.size = 1)
+
+tmap_arrange(map1, map2, map3, ncol=3)
+```
+
+```{r}
+set.seed(1234)
+HCSA_revenue_per_tourist <- wm_adapt_d %>%
+  mutate(local_Gi = local_g_perm(avg_revenue_per_tourist, nb, wt, nsim = 999),
+         .before = 1) %>%
+  unnest(local_Gi) %>%
+  mutate(hcsa = factor(case_when(p_sim >= 0.05 ~ "n.s",
+                                 TRUE ~ cluster),
+                       levels = c("High", "Low", "n.s")))
+```
+
+```{r}
+map1 <- tm_shape(HCSA_revenue_per_tourist) +
+  tm_fill("gi", title = "Local Gi") +
+  tm_borders(alpha = 0.5) +
+  tm_view(set.zoom.limits = c(6,8)) +
+  tm_layout(main.title = "Local Gi of Avg Revenue per Tourist",
+            main.title.size = 1)
+
+map2 <- tm_shape(HCSA_revenue_per_tourist) +
+  tm_fill("p_sim",
+          title = "p value  (permutation test)",
+          palette = c("0.001" = "#9e6700",
+                      "0.01" = "#c69554",
+                      "0.05" = "#eac59a",
+                      "n.s" = "#FFFFFF"),
+          breaks = c(0, 0.001, 0.01, 0.05, 1),
+          labels = c("0.001", "0.01", "0.05", "n.s")) +
+  tm_borders(alpha = 0.5) +
+  tm_layout(main.title = "p-value of Local Gi",
+            main.title.size = 1)
+
+map3 <- tm_shape(HCSA_revenue_per_tourist) +
+  tm_fill("hcsa",
+          title = "Hot/Cold Spots",
+          palette = c("High" = "#B22222",
+                      "Low" = "#2c7bb6",
+                      "n.s" = "#FFFFFF")) +
+  tm_borders(alpha = 0.5) +
+  tm_layout(main.title = "Hot/Cold Spot Analysis",
+            main.title.size = 1)
+
+tmap_arrange(map1, map2, map3, ncol=3)
+```
+# 9. Emerging Hot Spot Analysis
+```{r}
+tourism_st <- spacetime(tourism2, # attribute datafile
+                        provinces2, # geospatial datefile
+                        .loc_col = "province", # spatial field
+                        .time_col = "date" # time field which must be in integer
+                        )
+is_spacetime_cube(tourism_st)
+```
+
+```{r}
+tourism_nb <- tourism_st %>%
+  activate("geometry") %>%
+  mutate(nb = st_knn(st_centroid(geometry), k = 4),
+         wt = st_inverse_distance(nb, st_centroid(geometry), scale = 1, alpha =1),
+        .before = 1) %>%
+  set_nbs("nb") %>%
+  set_wts("wt")
+```
+
+## 9.1 
+```{r}
+# set.seed(1234)
+# gi_total_tourist <- tourism_nb %>%
+#   group_by(date) %>%
+#   mutate(local_gi = local_g_perm(no_tourist_all, nb, wt, nsim = 99)) %>%
+#   unnest(local_gi)
+# 
+# ehsa_total_tourist <- gi_total_tourist %>%
+#   group_by(province) %>%
+#   summarise(mk = list(unclass(Kendall::MannKendall(gi)))) %>%
+#   unnest_wider(mk) %>%
+#   arrange(sl, abs(tau))
+# 
+# head(ehsa_total_tourist, 10)
+```
+
+```{r}
+set.seed(1234)
+ehsa_total_tourist <- emerging_hotspot_analysis(x = tourism_st,
+                                                 .var = "no_tourist_all",
+                                                 k = 3,
+                                                 nsim = 99,
+                                                 threshold = 0.05
+                                                 )
+
+ehsa_total_tourist2 <- provinces2 %>%
+  left_join(ehsa_total_tourist, by = c("province" = "location"))
+```
+
+```{r}
+ehsa_sig <- ehsa_total_tourist2 %>%
+  filter(p_value < 0.05)
+
+tmap_mode("plot")
+tm_shape(ehsa_total_tourist2) +
+  tm_polygons() +
+  tm_borders(alpha = 0.5) +
+  tm_shape(ehsa_sig) +
+  tm_fill("classification") +
+  tm_borders(alpha = 0.4)  +
+  tm_layout(main.title = "Emerging Hotspot Analysis on Total Number of Tourists",
+            main.title.size = 1)
+```
+## 9.2
+```{r}
+set.seed(1234)
+ehsa_pct_foreign <- emerging_hotspot_analysis(x = tourism_st,
+                                                 .var = "percentage_foreign",
+                                                 k = 3,
+                                                 nsim = 99,
+                                                 threshold = 0.05
+                                                 )
+
+ehsa_pct_foreign2 <- provinces2 %>%
+  left_join(ehsa_pct_foreign, by = c("province" = "location"))
+```
+
+```{r}
+ehsa_sig <- ehsa_pct_foreign2 %>%
+  filter(p_value < 0.05)
+
+tmap_mode("plot")
+tm_shape(ehsa_pct_foreign2) +
+  tm_polygons() +
+  tm_borders(alpha = 0.5) +
+  tm_shape(ehsa_sig) +
+  tm_fill("classification") +
+  tm_borders(alpha = 0.4)  +
+  tm_layout(main.title = "Emerging Hotspot Analysis on Percentage of Foreign Tourists",
+            main.title.size = 1)
+```
+
+## 9.3
+```{r}
+set.seed(1234)
+ehsa_occupancy_rate <- emerging_hotspot_analysis(x = tourism_st,
+                                                 .var = "occupancy_rate",
+                                                 k = 3,
+                                                 nsim = 99,
+                                                 threshold = 0.05
+                                                 )
+
+ehsa_occupancy_rate2 <- provinces2 %>%
+  left_join(ehsa_occupancy_rate, by = c("province" = "location"))
+```
+
+```{r}
+ehsa_sig <- ehsa_occupancy_rate2 %>%
+  filter(p_value < 0.05)
+
+tmap_mode("plot")
+tm_shape(ehsa_occupancy_rate2) +
+  tm_polygons() +
+  tm_borders(alpha = 0.5) +
+  tm_shape(ehsa_sig) +
+  tm_fill("classification") +
+  tm_borders(alpha = 0.4)  +
+  tm_layout(main.title = "Emerging Hotspot Analysis on Occupancy Rate",
+            main.title.size = 1)
+```
+
+## 9.4
+```{r}
+set.seed(1234)
+ehsa_revenue <- emerging_hotspot_analysis(x = tourism_st,
+                                                 .var = "revenue_all",
+                                                 k = 3,
+                                                 nsim = 99,
+                                                 threshold = 0.05
+                                                 )
+
+ehsa_revenue2 <- provinces2 %>%
+  left_join(ehsa_revenue, by = c("province" = "location"))
+```
+
+```{r}
+ehsa_sig <- ehsa_revenue2 %>%
+  filter(p_value < 0.05)
+
+tmap_mode("plot")
+tm_shape(ehsa_revenue2) +
+  tm_polygons() +
+  tm_borders(alpha = 0.5) +
+  tm_shape(ehsa_sig) +
+  tm_fill("classification") +
+  tm_borders(alpha = 0.4)  +
+  tm_layout(main.title = "Emerging Hotspot Analysis on Total Revenue",
+            main.title.size = 1)
+```
+
+
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
