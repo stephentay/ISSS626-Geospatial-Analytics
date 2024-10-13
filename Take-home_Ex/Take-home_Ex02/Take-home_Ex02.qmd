@@ -727,6 +727,18 @@ global_c_perm(wm_adapt_d$avg_revenue_per_tourist, wm_adapt_d$nb, wm_adapt_d$wt, 
 :::
 
 # 6. Local Moran's I and LISA
+Local Moran’s I and Local Indicators of Spatial Association (LISA) are key tools used to identify spatial patterns at the local level, allowing us to detect clusters of similar values (hot/cold spots) and spatial outliers. In this study, these local measures of spatial autocorrelation are employed to examine whether key tourism economic indicators exhibit spatial dependency across Thailand’s provinces. By using Local Moran’s I and LISA, we can identify regions where tourism trends are clustered or where provinces deviate from their neighbors.
+
+The `sfdep` package was used to compute the local Moran's I and the LISA quandrant. 1000 simulations were conducted and the alpha value is set at 0.05. Seed is set to ensure reproducibility of results.
+The `tmap` package was used to plot three chropleth maps for each economic indicator:
+
+- Local Moran's I
+- p-value of local Moran's I
+- LISA map
+
+::: panel-tabset
+## 6.1 Total Number of Tourists
+With regards to the total number of tourists, LISA map reveals that there were a few provinces of outliers (i.e. negative autocorrelation) who are low-high (low outlier among high neighbours) and high-low (high outlier among low neighbours). We also observed some clusters of low-low (low surrounded by low neighbours).
 ```{r}
 set.seed(1234)
 lisa_total_tourist <- wm_adapt_d %>%
@@ -773,7 +785,8 @@ map3 <- tm_shape(lisa_total_tourist) +
 
 tmap_arrange(map1, map2, map3, ncol=3)
 ```
-
+## 6.2 Percentage of Foreign Tourists
+With regards to the percentage of foreign tourists, LISA map reveals several clusters of high-high and low-low, with a few outliers of low-high. The high-high clusters occur in the south of Thailand, while the low-low clusters occur in the central and west of Thailand.
 ```{r}
 set.seed(1234)
 lisa_pct_foreign <- wm_adapt_d %>%
@@ -820,7 +833,8 @@ map3 <- tm_shape(lisa_pct_foreign) +
 
 tmap_arrange(map1, map2, map3, ncol=3)
 ```
-
+## 6.3 Occupancy Rate
+With regards to occupancy rate, LISA map reveals several outliers of low-high and high-low, with some areas of low-low clusters.
 ```{r}
 set.seed(1234)
 lisa_occupancy_rate <- wm_adapt_d %>%
@@ -867,7 +881,8 @@ map3 <- tm_shape(lisa_occupancy_rate) +
 
 tmap_arrange(map1, map2, map3, ncol=3)
 ```
-
+## 6.4 Total Revenue
+With regards to total revenue, LISA map reveals several clusters of low-low provinces, with a few outliers of low-high. Low-low clusters occur in central and east of Thailand.
 ```{r}
 set.seed(1234)
 lisa_revenue <- wm_adapt_d %>%
@@ -914,7 +929,8 @@ map3 <- tm_shape(lisa_revenue) +
 
 tmap_arrange(map1, map2, map3, ncol=3)
 ```
-
+## 6.5 Average Revenue per Tourist
+With regards to average revenue per tourist, LISA map reveals several clusters of low-low provinces and high-high provinces with no outliers. The high-high clusters occur in the south of Thailand, while the low-low clusters occur in the central and east of Thailand.
 ```{r}
 set.seed(1234)
 lisa_revenue_per_tourist <- wm_adapt_d %>%
@@ -961,7 +977,21 @@ map3 <- tm_shape(lisa_revenue_per_tourist) +
 
 tmap_arrange(map1, map2, map3, ncol=3)
 ```
-# 7. Gi test and hot/cold spot analysis
+:::
+
+# 7. Gi Test & Hot/Cold Spot Analysis
+The Gi test and hot/cold spot analysis are methods for identifying statistically significant clusters of high (hot spots) and low (cold spots) values in spatial data, revealing regions where tourism indicators are either concentrated or lagging. By excluding the self-location in the Gi test, the analysis focuses on the spatial influence and spillover effects from surrounding areas, rather than the province’s own value. This exclusion helps prevent local high or low values from biasing the results.
+
+Similarly, the `sfdep` package was used to compute the local Gi and classify hot/cold spots. 1000 simulations were conducted and the alpha value is set at 0.05. Seed is set to ensure reproducibility of results.
+The `tmap` package was used to plot three chropleth maps for each economic indicator:
+
+- Local Gi statistic
+- p-value of local Gi
+- Hot/cold spot analysis map
+
+::: panel-tabset
+## 7.1 Total Number of Tourists
+With regards to the total number of tourists, one hot spot was detected and several cold spots were detected in the central and east of Thailand.
 ```{r}
 set.seed(1234)
 HCSA_total_tourist <- wm_adapt_d %>%
@@ -1007,7 +1037,8 @@ map3 <- tm_shape(HCSA_total_tourist) +
 
 tmap_arrange(map1, map2, map3, ncol=3)
 ```
-
+## 7.2 Percentage of Foreign Tourists
+With regards to the percentage of foreign tourists, cold spots were detected in central/west of Thailand, while hot spots were detected in southern Thailand.
 ```{r}
 set.seed(1234)
 HCSA_pct_foreign <- wm_adapt_d %>%
@@ -1054,6 +1085,8 @@ map3 <- tm_shape(HCSA_pct_foreign) +
 tmap_arrange(map1, map2, map3, ncol=3)
 ```
 
+## 7.3 Occupancy Rate
+With regards to the occupancy rate, hot spots were detected in Phuket and west of Thailand, while cold spots were detected in northern Thailand.
 ```{r}
 set.seed(1234)
 HCSA_occupancy_rate <- wm_adapt_d %>%
@@ -1099,7 +1132,8 @@ map3 <- tm_shape(HCSA_occupancy_rate) +
 
 tmap_arrange(map1, map2, map3, ncol=3)
 ```
-
+## 7.4 Total Revenue
+With regards to the total revenue, cold spots were detected in central and east of Thailand.
 ```{r}
 set.seed(1234)
 HCSA_revenue <- wm_adapt_d %>%
@@ -1146,6 +1180,8 @@ map3 <- tm_shape(HCSA_revenue) +
 tmap_arrange(map1, map2, map3, ncol=3)
 ```
 
+## 7.5 Average Revenue per Tourist
+With regards to the average revenue per tourist, cold spots were detected in central and east of Thailand, while hot spots were detected in southern Thailand.
 ```{r}
 set.seed(1234)
 HCSA_revenue_per_tourist <- wm_adapt_d %>%
@@ -1191,7 +1227,12 @@ map3 <- tm_shape(HCSA_revenue_per_tourist) +
 
 tmap_arrange(map1, map2, map3, ncol=3)
 ```
-# 9. Emerging Hot Spot Analysis
+:::
+
+# 8. Emerging Hot Spot Analysis
+Emerging Hot Spot Analysis is used to identify trends and changes in spatial patterns over time, particularly for detecting areas where significant increases (emerging hot spots) or decreases (emerging cold spots) in activity are occurring. In this study, Emerging Hot Spot Analysis is employed to track shifts in key tourism economic indicators across Thailand’s provinces. 
+
+We will use monthly data for the emerging hot spot analysis. A spacetime cube is created using `spacetime()`. 
 ```{r}
 tourism_st <- spacetime(tourism2, # attribute datafile
                         provinces2, # geospatial datefile
@@ -1201,6 +1242,7 @@ tourism_st <- spacetime(tourism2, # attribute datafile
 is_spacetime_cube(tourism_st)
 ```
 
+We then compute the adapative distance weights (4 neighbours excluding self) in the spacetime cube.
 ```{r}
 tourism_nb <- tourism_st %>%
   activate("geometry") %>%
@@ -1211,23 +1253,13 @@ tourism_nb <- tourism_st %>%
   set_wts("wt")
 ```
 
-## 9.1 
-```{r}
-# set.seed(1234)
-# gi_total_tourist <- tourism_nb %>%
-#   group_by(date) %>%
-#   mutate(local_gi = local_g_perm(no_tourist_all, nb, wt, nsim = 99)) %>%
-#   unnest(local_gi)
-# 
-# ehsa_total_tourist <- gi_total_tourist %>%
-#   group_by(province) %>%
-#   summarise(mk = list(unclass(Kendall::MannKendall(gi)))) %>%
-#   unnest_wider(mk) %>%
-#   arrange(sl, abs(tau))
-# 
-# head(ehsa_total_tourist, 10)
-```
+We used the `emerging_hotspot_analysis()` function with k set to 3 time periods to smooth out the effects of fluctuating seasonality and to account for the longer-term temporal impact of COVID-19 restrictions. Setting k=3 helps to avoid over-sensitivity to short-term variations. For each indicator, 100 simulations were conducted with an alpha value of 0.05. A seed was set to ensure the reproducibility of results.
 
+We then join the results to the geospatial sf dataframe, so that we could plot the emerging hot spot map using `tmap` package.
+
+::: panel-tabset
+## 8.1 Total Number of Tourists
+Based on the emerging hot spot map, most provinces have patterns that were unclassified (does not fall into any identified patterns). There were some consecutive cold spots (uninterrupted run of cold spots in final time periods), one province with intensifying cold spot (historically cold but becoming colder), and some oscillating hot spots (historically cold spot but become hotspot in the final period). 
 ```{r}
 set.seed(1234)
 ehsa_total_tourist <- emerging_hotspot_analysis(x = tourism_st,
@@ -1256,7 +1288,8 @@ tm_shape(ehsa_total_tourist2) +
   tm_layout(main.title = "Emerging Hotspot Analysis on Total Number of Tourists",
             main.title.size = 1)
 ```
-## 9.2
+## 8.2 Percentage of Foreign Tourists
+For percentage of foreign tourists, a number of provinces have patterns that were unclassified (does not fall into any identified patterns). There were some oscillating hot spots (historically cold spot but become hotspot in the final period), sporadic hot spots (on-and-off hot spots over time but never cold spots), and some sporadic cold spots.
 ```{r}
 set.seed(1234)
 ehsa_pct_foreign <- emerging_hotspot_analysis(x = tourism_st,
@@ -1286,7 +1319,8 @@ tm_shape(ehsa_pct_foreign2) +
             main.title.size = 1)
 ```
 
-## 9.3
+## 8.3 Occupancy Rate
+For occupancy rate, a few provinces have patterns that were unclassified (does not fall into any identified patterns). There were some oscillating cold spots (historically hot spot but become cold spot in the final period) and oscillating hot spots.
 ```{r}
 set.seed(1234)
 ehsa_occupancy_rate <- emerging_hotspot_analysis(x = tourism_st,
@@ -1316,7 +1350,8 @@ tm_shape(ehsa_occupancy_rate2) +
             main.title.size = 1)
 ```
 
-## 9.4
+## 8.4 Total Revenue
+For total revenue, a number of provinces have patterns that were unclassified (does not fall into any identified patterns). There were some consecutive cold spots (uninterrupted run of cold spots in final time periods), intensifying cold spot (historically cold but becoming colder), and oscillating cold spots (historically hot spot but become cold spot in the final period).
 ```{r}
 set.seed(1234)
 ehsa_revenue <- emerging_hotspot_analysis(x = tourism_st,
@@ -1347,219 +1382,23 @@ tm_shape(ehsa_revenue2) +
 ```
 
 
-
+## 8.5 Average Revenue per Tourist
+This analysis could not be run due to the presence of zeros in several months.
 ```{r}
+#| eval: false
+set.seed(1234)
+ehsa_revenue_per_tourist <- emerging_hotspot_analysis(x = tourism_st,
+                                                 .var = "revenue_per_tourist",
+                                                 k = 3,
+                                                 nsim = 99,
+                                                 threshold = 0.05
+                                                 )
 
+ehsa_revenue_per_tourist2 <- provinces2 %>%
+  left_join(ehsa_revenue_per_tourist, by = c("province" = "location"))
 ```
 
-```{r}
+:::
 
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
+# 9. Conclusion
+This study successfully examined the spatial and spatio-temporal dependencies of Thailand’s tourism economy. By analysing key tourism indicators (such as total number of tourists, occupancy rates, and revenue), we identified clear patterns of both spatial and spatio-temporal dependencies at the provincial level. The use of Local Moran’s I, LISA, Gi test, and Emerging Hot Spot Analysis enabled the detection of clusters, outliers, and emerging trends, highlighting both areas of recovery and continued struggles across several provinces. Notably, a few hot spots were identified for certain indicators during the later period in post-covid, particularly the number of tourists, percentage of foreign tourists, and occupancy rates. 
