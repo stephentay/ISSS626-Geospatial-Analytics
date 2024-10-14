@@ -1,0 +1,354 @@
+---
+title: "In-class Ex 7"
+subtitle: ""
+author: "Stephen Tay"
+date: "14 Oct 2024"
+date-modified:  "last-modified"
+execute: 
+  eval: true
+  echo: true
+  message: false
+  warning: false
+  freeze: true 
+---
+
+# 1. Overview
+
+
+```{r}
+pacman::p_load(olsrr, ggstatsplot, ggpubr, sf, spdep, GWmodel, tmap, tidyverse, gtsummary, performance, see, sfdep)
+```
+
+# 2. Importing & Transforming Data
+
+
+::: panel-tabset
+## 1. Importing master plan subzone
+
+```{r}
+mpsz <- st_read(dsn = "data/geospatial", layer = "MP14_SUBZONE_WEB_PL") %>%
+  st_transform(3414)
+```
+## 2. Import condo resale prices dataset
+Since there are lat/long in the csv file and you do not know the coordinate system, you make a best guess and indicate the closest geographical coordinate system (which is 4326 in this case). You can double confirm whether 4326 is the correct one by plotting it and check whether it matches the real world. We then transform it to projected coordinate system (3414).
+```{r}
+condo_resale = read_csv("data/aspatial/Condo_resale_2015.csv")
+head(condo_resale)
+```
+
+```{r}
+condo_resale_sf = condo_resale %>%
+  st_as_sf(coords = c("LONGITUDE", "LATITUDE"), 
+           crs=4326) %>% # use the geo coordinate system of the lat/long in the csv file
+  st_transform(crs=3414)
+head(condo_resale_sf)
+```
+
+:::
+
+# 3. Building the Hedonic Price Model
+
+## Correlation Matrix
+To avoid multicollinearity, it's always important to check the relationship between variables to identify any variables with high correlation.
+
+```{r}
+#| fig-width: 12
+#| fig-height: 10
+ggcorrmat(condo_resale[, 5:23])
+```
+
+## Initial MLR Model
+```{r}
+condo_mlr <- lm(formula = SELLING_PRICE ~ AREA_SQM + AGE    + 
+                  PROX_CBD + PROX_CHILDCARE + PROX_ELDERLYCARE +
+                  PROX_URA_GROWTH_AREA + PROX_HAWKER_MARKET + PROX_KINDERGARTEN + 
+                  PROX_MRT  + PROX_PARK + PROX_PRIMARY_SCH + 
+                  PROX_TOP_PRIMARY_SCH + PROX_SHOPPING_MALL + PROX_SUPERMARKET + 
+                  PROX_BUS_STOP + NO_Of_UNITS + FAMILY_FRIENDLY + FREEHOLD + 
+                  LEASEHOLD_99YR, 
+                data=condo_resale_sf)
+summary(condo_mlr)
+```
+
+## Model Assessment Report (using `olsrr`)
+In model assessment, we first check the p-value of the model and the R2. Then after that, we will look at individual variables to check whether any of them which are non-statistically significant which should be eliminated from the model.
+```{r}
+ols_regress(condo_mlr)
+```
+## Multicollinearity
+We look at the VIF to check for any variables resulting in multi-collinearity (monitor the model/variables if VIF is between 5-10, and eliminate if VIF is above 10). Since all the variables are less than 10, we do not need to eliminate any of the variables.
+```{r}
+ols_vif_tol(condo_mlr)
+```
+
+## Variable Selection
+Using stepwise forward selection method. It's important that we use the p-value as the selection criteria as we want all our variables to be signficant.
+```{r}
+condo_fw_mlr <- ols_step_forward_p(condo_mlr,
+                                   p_val = 0.05,
+                                   details = FALSE)
+```
+
+```{r}
+#| fig-width: 12
+#| fig-height: 10
+plot(condo_fw_mlr)
+```
+
+## Test for Non-linearity
+```{r}
+ols_plot_resid_fit(condo_fw_mlr$model)
+```
+## Test of Normality of Residuals
+
+```{r}
+ols_plot_resid_hist(condo_fw_mlr$model)
+```
+
+```{r}
+ols_test_normality(condo_fw_mlr$model)
+```
+## Test for Spatial Autocorrelation
+The hedonic model we try to build are using geographically referenced attributes, hence it is also important for us to visual the residual of the hedonic pricing model. In order to perform spatial autocorrelation test, we need to convert condo resale sf from sf data frame into a SpatialPointsDataFrame.
+First, we will export the residual of the hedonic pricing model and save it as a data frame.
+```{r}
+mlr_output <- as.data.frame(condo_fw_mlr$model$residuals) %>%
+  rename(`FW_MLR_RES` = `condo_fw_mlr$model$residuals`)
+```
+
+Next, we will join the newly created dataframe with condo_resale_sf object.
+```{r}
+condo_resale_sf <- cbind(condo_resale_sf,
+                         mlr_output$FW_MLR_RES) %>%
+  rename(`MLR_RES` = `mlr_output.FW_MLR_RES`)
+```
+
+## Plotting of Residuals
+We plot the residuals to see which are over-estimated and which are under-estimated. Since visually there are clusters of over-estimated and under-estimated prices, then this could be signs of spatial auto-correlation.
+```{r}
+tmap_mode("view")
+#tmap_options(check.and.fix = TRUE) -- add this code here to fix any layers with problematic lines/polygons.
+
+tm_shape(mpsz) +
+  tmap_options(check.and.fix = TRUE) + # add this line here to explicitly fix problematic polygons in this specific layer.
+  tm_polygons(alpha = 0.4) +
+  tm_shape(condo_resale_sf) +  
+  tm_dots(col = "MLR_RES",
+          alpha = 0.6,
+          style="quantile") +
+  tm_view(set.zoom.limits = c(11,14))
+tmap_mode("plot")
+```
+
+```{r}
+condo_resale_sf <- condo_resale_sf %>%
+  mutate(nb = st_knn(geometry, k = 6, longlat = FALSE),
+         wt = st_weights(nb, style = "W"),
+         .before = 1)
+```
+
+
+We run global moran i permuatation test to check whether there are spatial autocorrelation of the prices.
+The Global Moran's I test for residual spatial autocorrelation shows that it's p-value is less than the alpha value of 0.05. Hence, we will reject the null hypothesis that the residuals are randomly distributed.
+Since the Observed Global Moran I = 0.25586 which is greater than 0, we can infer than the residuals resemble cluster distribution.
+```{r}
+global_moran_perm(condo_resale_sf$MLR_RES,
+                  condo_resale_sf$nb,
+                  condo_resale_sf$wt,
+                  alternative = "two.sided",
+                  nsim = 99)
+```
+
+# 4. Build Fixed Bandwidth GWR Model
+```{r}
+bw_fixed <- bw.gwr(formula = SELLING_PRICE ~ AREA_SQM + AGE +
+                     PROX_CBD + PROX_CHILDCARE + 
+                     PROX_ELDERLYCARE + PROX_URA_GROWTH_AREA + 
+                     PROX_MRT + PROX_PARK + PROX_PRIMARY_SCH + 
+                     PROX_SHOPPING_MALL + PROX_BUS_STOP + 
+                     NO_Of_UNITS + FAMILY_FRIENDLY + FREEHOLD, 
+                   data=condo_resale_sf,
+                   approach="CV",
+                   kernel = "gaussian",
+                   adaptive = FALSE,
+                   longlat = FALSE)
+```
+
+You can see the improvements in R2 and the AICc. AICc is robust for small dataset. 
+```{r}
+gwr_fixed <- gwr.basic(formula = SELLING_PRICE ~ AREA_SQM + AGE +
+                         PROX_CBD + PROX_CHILDCARE + 
+                         PROX_ELDERLYCARE + PROX_URA_GROWTH_AREA + 
+                         PROX_MRT + PROX_PARK + PROX_PRIMARY_SCH + 
+                         PROX_SHOPPING_MALL + PROX_BUS_STOP + 
+                         NO_Of_UNITS + FAMILY_FRIENDLY + FREEHOLD, 
+                       data=condo_resale_sf, 
+                       bw=bw_fixed, 
+                       kernel = 'gaussian', 
+                       longlat = FALSE)
+gwr_fixed
+```
+
+
+```{r}
+bw_adaptive <- bw.gwr(formula = SELLING_PRICE ~ AREA_SQM + AGE +
+                     PROX_CBD + PROX_CHILDCARE + 
+                     PROX_ELDERLYCARE + PROX_URA_GROWTH_AREA + 
+                     PROX_MRT + PROX_PARK + PROX_PRIMARY_SCH + 
+                     PROX_SHOPPING_MALL + PROX_BUS_STOP + 
+                     NO_Of_UNITS + FAMILY_FRIENDLY + FREEHOLD, 
+                   data=condo_resale_sf,
+                   approach="CV",
+                   kernel = "gaussian",
+                   adaptive = TRUE,
+                   longlat = FALSE)
+```
+
+```{r}
+gwr_adaptive <- gwr.basic(formula = SELLING_PRICE ~ AREA_SQM + AGE +
+                            PROX_CBD + PROX_CHILDCARE + 
+                            PROX_ELDERLYCARE + PROX_URA_GROWTH_AREA + 
+                            PROX_MRT + PROX_PARK + PROX_PRIMARY_SCH + 
+                            PROX_SHOPPING_MALL + PROX_BUS_STOP + 
+                            NO_Of_UNITS + FAMILY_FRIENDLY + FREEHOLD, 
+                         data=condo_resale_sf, 
+                         bw=bw_adaptive,
+                         kernel = 'gaussian', 
+                         adaptive=TRUE,
+                         longlat = FALSE)
+gwr_adaptive
+```
+
+
+```{r}
+gwr_adaptive_output <- as.data.frame(gwr_adaptive$SDF) %>%
+  select(-c(2:15))
+```
+
+```{r}
+gwr_sf_adaptive <- cbind(condo_resale_sf,
+                         gwr_adaptive_output)
+glimpse(gwr_sf_adaptive)
+```
+
+
+```{r}
+tmap_mode("view")
+tm_shape(mpsz)+
+  tm_polygons(alpha = 0.1) +
+tm_shape(gwr_sf_adaptive) +  
+  tm_dots(col = "Local_R2",
+          border.col = "gray60",
+          border.lwd = 1) +
+  tm_view(set.zoom.limits = c(11,14))
+tmap_mode("plot")
+```
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+
+```{r}
+bw_adaptivex <- bw.gwr(formula = SELLING_PRICE ~ AREA_SQM + AGE +
+                     PROX_CBD + PROX_CHILDCARE + 
+                     PROX_ELDERLYCARE + PROX_URA_GROWTH_AREA + 
+                     PROX_MRT + PROX_PARK + PROX_PRIMARY_SCH + 
+                     PROX_SHOPPING_MALL + PROX_BUS_STOP + PROX_TOP_PRIMARY_SCH +
+                     NO_Of_UNITS + FAMILY_FRIENDLY + FREEHOLD, 
+                   data=condo_resale_sf,
+                   approach="CV",
+                   kernel = "gaussian",
+                   adaptive = TRUE,
+                   longlat = FALSE)
+```
+
+```{r}
+gwr_adaptivex <- gwr.basic(formula = SELLING_PRICE ~ AREA_SQM + AGE +
+                            PROX_CBD + PROX_CHILDCARE + 
+                            PROX_ELDERLYCARE + PROX_URA_GROWTH_AREA + 
+                            PROX_MRT + PROX_PARK + PROX_PRIMARY_SCH + 
+                            PROX_SHOPPING_MALL + PROX_BUS_STOP + PROX_TOP_PRIMARY_SCH +
+                            NO_Of_UNITS + FAMILY_FRIENDLY + FREEHOLD, 
+                         data=condo_resale_sf, 
+                         bw=bw_adaptivex,
+                         kernel = 'gaussian', 
+                         adaptive=TRUE,
+                         longlat = FALSE)
+gwr_adaptivex
+```
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+
+
