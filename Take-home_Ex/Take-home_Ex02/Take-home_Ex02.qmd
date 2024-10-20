@@ -22,8 +22,8 @@ Since September 2021, tourism revenues have shown gradual recovery as internatio
 
 This study employs spatial and spatio-temporal statistical methods at the provincial level to achieve the following objectives:
 
-- To determine whether key indicators of Thailand’s tourism economy exhibit spatial and spatio-temporal dependencies.
-- If such dependencies are present, to identify clusters, outliers, and emerging hot/cold spots.
+-   To determine whether key indicators of Thailand’s tourism economy exhibit spatial and spatio-temporal dependencies.
+-   If such dependencies are present, to identify clusters, outliers, and emerging hot/cold spots.
 
 ## 1.2 R Packages
 
@@ -37,37 +37,48 @@ pacman::p_load(sf, sfdep, spdep, Kendall, plotly, tmap, tidyverse, classInt)
 
 Two datasets were used in this study:
 
-- **Thailand Administrative Boundaries:** This dataset, obtained from [HDX] (https://data.humdata.org/dataset/cod-ab-tha?), provides boundary data at multiple administrative levels, including national (level 0), provincial (level 1), district (level 2), and sub-district (level 3). The dataset, updated in January 2022, offers geographic context for the analysis. For this study, only the provincial (level 1) boundaries were utilised.
-- **Thailand Tourism Statistics:** This dataset, sourced from [Kaggle] (https://www.kaggle.com/datasets/thaweewatboy/thailand-domestic-tourism-statistics), contains provincial tourism indicators (from Jan 2019- Feb 2023) which were extracted from Thailand’s Ministry of Tourism and Sports.
+-   **Thailand Administrative Boundaries:** This dataset, obtained from \[HDX\] (https://data.humdata.org/dataset/cod-ab-tha?), provides boundary data at multiple administrative levels, including national (level 0), provincial (level 1), district (level 2), and sub-district (level 3). The dataset, updated in January 2022, offers geographic context for the analysis. For this study, only the provincial (level 1) boundaries were utilised.
+-   **Thailand Tourism Statistics:** This dataset, sourced from \[Kaggle\] (https://www.kaggle.com/datasets/thaweewatboy/thailand-domestic-tourism-statistics), contains provincial tourism indicators (from Jan 2019- Feb 2023) which were extracted from Thailand’s Ministry of Tourism and Sports.
 
-## 2.1. Geospatial Data: Provincial Boundaries 
+## 2.1. Geospatial Data: Provincial Boundaries
+
 The following steps were undertaken to import and prepare the geospatial data for analysis.
 
 ::: panel-tabset
 ### 1. Import and Data Overview
+
 From Take-Home Exercise 1, we learnt that tha_admbnda_adm1_rtsd_20220121 shapefile contains the multipolygon features of Thailand's provinces. We import this layer using `st_read()`. The output shows that the geometries are in WGS 84 geographical coordinate system.
+
 ```{r}
 provinces <- st_read(dsn = "data/geospatial", 
                   layer = "tha_admbnda_adm1_rtsd_20220121")
 ```
+
 The sf dataframe contains a number of fields, of which only `ADM1_EN` and `geometry` are relevant to the study.
+
 ```{r}
 glimpse(provinces)
 ```
+
 ### 2. Provincial Map Plot
+
 We use the `tmap` package to plot the provincial boundaries.
+
 ```{r}
 tmap_mode('plot')
 tm_shape(provinces) +
   tm_borders()
 ```
-### 3. Data Wrangling & Transformation
-We use `select()` to select the two relevant fields: 
 
-- `ADM1_EN` renamed to `province`
-- `geometry`
+### 3. Data Wrangling & Transformation
+
+We use `select()` to select the two relevant fields:
+
+-   `ADM1_EN` renamed to `province`
+-   `geometry`
 
 As the shapefile is in WGS geographical coordinate system, we use `st_transform()` to transform them to the projected coordinate system, EPSG 32647. We then use `st_centroid` to compute the centroid for each province.
+
 ```{r}
 provinces2 <- provinces %>%
   select("province" = "ADM1_EN", "geometry")  %>%
@@ -75,23 +86,31 @@ provinces2 <- provinces %>%
   mutate(centroid = st_centroid(geometry))
 glimpse(provinces2)
 ```
+
 A check on the Coordinate Reference System using `st_crs()` revealed that it is now in projected coordinate system.
+
 ```{r}
 st_crs(provinces2)
 ```
+
 ### 4. Check Centroids within Land
+
 To ensure that all centroids are correctly positioned within the land area of each province, we use the `st_within()` function. This function checks whether each centroid falls within its corresponding provincial boundary. For each province, the output will be `TRUE` if the centroid is within the land and `FALSE` if it is not.
 
 We then apply `rowSums()` to count the number of `TRUE` values across all 77 provinces. A row sum of 1 indicates the centroid is within the land boundary, while any other value suggests an issue. Finally, we use `filter()` to identify any centroid that does not fall within the land boundary (i.e., cases where the row sum is not equal to 1).
 
 The output shows that all centroids fall within land.
+
 ```{r}
 provinces2 %>%
   mutate(centroid_within_land = rowSums(st_within(centroid, geometry, sparse = FALSE))) %>%
   filter(centroid_within_land != 1)
 ```
+
 ### 5. Geovisualisation of Province Boundaries and Centroids
+
 The interactive plot below shows the provincial boundaries along with the computed centroids.
+
 ```{r}
 tmap_mode('view')
 tm_shape(provinces2) +
@@ -100,28 +119,34 @@ tm_shape(provinces2) +
   tm_dots(col = "red")
 tmap_mode('plot')
 ```
-
 :::
 
 ## 2.2 Aspatial Data: Tourism Statistics
+
 The following steps were undertaken to import, detect any data-related issues, and prepare the Thailand Tourism Statistics dataset for analysis.
 
 ::: panel-tabset
 ### 1. Import and Data Overview
+
 The `thailand_domestic_tourism_2019_2023_ver2.csv` file was imported using `read_csv()`. A preview of the dataset using `glimpse()` revealed that it contains 30,800 rows with 7 columns. The data is structured in long format, with all tourism economic indicators stored in the `variable` and `value` columns.
+
 ```{r}
 tourism <- read_csv("data/aspatial/thailand_domestic_tourism_2019_2023_ver2.csv")
 glimpse(tourism)
 ```
+
 ### 2. Check Missing Data 1
-The combined use of `colMeans()` and `is.na()` functions was employed to check for any missing data. 
-The output shows that the dataset does not contain any missing data.
+
+The combined use of `colMeans()` and `is.na()` functions was employed to check for any missing data. The output shows that the dataset does not contain any missing data.
+
 ```{r}
 colMeans(is.na(tourism))
 ```
 
 ### 3. Check for Mismatched Provincial Names
+
 We used `anti_join()` to identify any provincial names in the tourism dataset that did not match those in the geospatial dataset. The output revealed 8 unmatched provinces.
+
 ```{r}
 tourism %>% 
   anti_join(provinces2, by = c("province_eng" = "province")) %>% 
@@ -130,6 +155,7 @@ tourism %>%
 ```
 
 Next, we reversed the process by using `anti_join()` again to check for unmatched provincial names in the geospatial dataset compared to the tourism dataset. This also showed 8 unmatched provinces. The mismatches were due to differences in spelling, such as spaces in provincial names. This highlighted the need to correct the inconsistencies to ensure the datasets can be accurately joined later.
+
 ```{r}
 provinces2 %>% 
   anti_join(tourism, by = c("province" = "province_eng")) %>%
@@ -137,11 +163,12 @@ provinces2 %>%
 ```
 
 ### 4. Data Wrangling
+
 The following sub-steps were undertaken to transform the tourism dataset:
 
-- Selected the necessary variables for the study using `select()`, and simultaneously renamed `province_eng` to `province`.
-- Pivoted the dataset from long to wide format using `spread()`, ensuring each economic indicator occupies its own column in the wide table.
-- Corrected the 8 misspelled provinces to ensure consistency with the provincial names in the geospatial dataset. This was done using `mutate()` and `case_when()`.
+-   Selected the necessary variables for the study using `select()`, and simultaneously renamed `province_eng` to `province`.
+-   Pivoted the dataset from long to wide format using `spread()`, ensuring each economic indicator occupies its own column in the wide table.
+-   Corrected the 8 misspelled provinces to ensure consistency with the provincial names in the geospatial dataset. This was done using `mutate()` and `case_when()`.
 
 ```{r}
 tourism1 <- tourism %>%
@@ -158,19 +185,25 @@ tourism1 <- tourism %>%
                               TRUE ~ province))
 glimpse(tourism1)
 ```
+
 ### 5. Check Missing Data 2
+
 We check whether the wide table contains any missing data, and the output shows that it does not contain any missing data.
+
 ```{r}
 colMeans(is.na(tourism1))
 ```
 :::
 
 ## 2.3 Exploratory Data Analysis
+
 Additionally, Exploratory Data Analysis (EDA) was performed to gain deeper insights into the data and to ensure that the final prepared dataset is robust and suitable for subsequent analysis. Interactive plots of all the economic indicators were developed using the `plotly` package.
 
 ::: panel-tabset
 ### 1. Total Number of Tourists
+
 The plot shows that the total number of tourists (both domestic and international) was highest in Bangkok. All provinces were significantly affected by COVID-19 restrictions, with tourist numbers plummeting starting in January 2020. A brief rebound occurred, followed by another decline between May and August 2021. A steady recovery is observed after the lifting of restrictions in September 2022.
+
 ```{r}
 plot_ly(tourism1, x = ~date, y = ~no_tourist_all, color = ~province, type = 'scatter', mode = 'lines') %>%
   layout(title = "Total Number of Tourists by Province (2019-2023)",
@@ -179,7 +212,9 @@ plot_ly(tourism1, x = ~date, y = ~no_tourist_all, color = ~province, type = 'sca
 ```
 
 ### 2. Number of Foreign Tourists
+
 The plot on the number of foreign tourists is similar to the previous one on the total number of tourists. The key difference was the lack of foreign tourists during the heavy pandemic restrictions between Apr 2020 to Nov 2021.
+
 ```{r}
 plot_ly(tourism1, x = ~date, y = ~no_tourist_foreign, color = ~province, type = 'scatter', mode = 'lines') %>%
   layout(title = "Number of Foreign Tourists by Province (2019-2023)",
@@ -188,7 +223,9 @@ plot_ly(tourism1, x = ~date, y = ~no_tourist_foreign, color = ~province, type = 
 ```
 
 ### 3. Number of Domestic Tourists
-The plot on the number of domestic tourists is similar to the plot on the total number of tourists. 
+
+The plot on the number of domestic tourists is similar to the plot on the total number of tourists.
+
 ```{r}
 plot_ly(tourism1, x = ~date, y = ~no_tourist_thai, color = ~province, type = 'scatter', mode = 'lines') %>%
   layout(title = "Number of Domestic Tourists by Province (2019-2023)",
@@ -197,7 +234,9 @@ plot_ly(tourism1, x = ~date, y = ~no_tourist_thai, color = ~province, type = 'sc
 ```
 
 ### 4. Number of Tourists with Travel Accommodation
+
 The plot showing the number of tourists who stayed in travel accommodations closely mirrors the plot for the total number of tourists, though it’s noteworthy that the rate of growth and decline in accommodation figures differs slightly from the overall tourist numbers.
+
 ```{r}
 plot_ly(tourism1, x = ~date, y = ~no_tourist_stay, color = ~province, type = 'scatter', mode = 'lines') %>%
   layout(title = "Number of Tourists with Travel Accommodation by Province (2019-2023)",
@@ -206,7 +245,9 @@ plot_ly(tourism1, x = ~date, y = ~no_tourist_stay, color = ~province, type = 'sc
 ```
 
 ### 5. Occupancy Rate
+
 We see similar impact of COVID-19 restrictions on occupancy rate. We observed more fluctuations in occupancy rate compared to other tourism economic indicators.
+
 ```{r}
 plot_ly(tourism1, x = ~date, y = ~ratio_tourist_stay, color = ~province, type = 'scatter', mode = 'lines') %>%
   layout(title = "Occupancy Rate by Province (2019-2023)",
@@ -215,6 +256,7 @@ plot_ly(tourism1, x = ~date, y = ~ratio_tourist_stay, color = ~province, type = 
 ```
 
 ### 6. Total Tourism Revenue
+
 The plot shows that the total tourism revenue (both domestic and international) was highest in Bangkok, followed by Phuket. We see similar impact of COVID-19 restrictions on the overall trend. However, it seems that total revenue were growing slower than total number of tourists during the later stage of the pandemic and post-Covid.
 
 ```{r}
@@ -225,7 +267,9 @@ plot_ly(tourism1, x = ~date, y = ~revenue_all, color = ~province, type = 'scatte
 ```
 
 ### 7. Revenue by Foreign Tourists
+
 The plot on the revenue generated by foreign tourists is similar to the plot on the total revenue. The key difference was the diminished revenue during the heavy pandemic restrictions between Apr 2020 to Nov 2021.
+
 ```{r}
 plot_ly(tourism1, x = ~date, y = ~revenue_foreign, color = ~province, type = 'scatter', mode = 'lines') %>%
   layout(title = "Revenue Generated by Foreign Tourists by Province (2019-2023)",
@@ -234,7 +278,9 @@ plot_ly(tourism1, x = ~date, y = ~revenue_foreign, color = ~province, type = 'sc
 ```
 
 ### 8. Revenue by Domestic Tourists
-The general trend on the revenue generated by domestic tourists is similar to the plot on the number of domestic tourists. 
+
+The general trend on the revenue generated by domestic tourists is similar to the plot on the number of domestic tourists.
+
 ```{r}
 plot_ly(tourism1, x = ~date, y = ~revenue_thai, color = ~province, type = 'scatter', mode = 'lines') %>%
   layout(title = "Revenue Generated by Domestic Tourists by Province (2019-2023)",
@@ -244,21 +290,23 @@ plot_ly(tourism1, x = ~date, y = ~revenue_thai, color = ~province, type = 'scatt
 :::
 
 ## 2.4 Selected Key Tourism Economic Indicators
+
 Based on the EDA, the following key indicators were selected to analyse the impact of COVID-19 on Thailand’s tourism economy. To ensure the scope of the study remained focused, we removed similar indicators and prioritised those that offer distinct insights into tourism demand and economic impact.
 
-- **Total Number of Tourists (Domestic and Foreigners):** This captures overall tourism demand and helps track the effects of COVID-19 restrictions and recovery across provinces.
-- **Percentage of Tourists who are Foreigners:** This metric highlights the contribution of international tourism and reflects how travel restrictions impacted foreign visitor flows.
-- **Occupancy Rate:** This indicates the usage and health of the hospitality sector.
-- **Total Revenue (Domestic and Foreigners):** This measures the revenue generation from the tourism industry.
-- **Average Revenue per Tourist:**This helps assess the spending behavior of tourists.
+-   **Total Number of Tourists (Domestic and Foreigners):** This captures overall tourism demand and helps track the effects of COVID-19 restrictions and recovery across provinces.
+-   **Percentage of Tourists who are Foreigners:** This metric highlights the contribution of international tourism and reflects how travel restrictions impacted foreign visitor flows.
+-   **Occupancy Rate:** This indicates the usage and health of the hospitality sector.
+-   **Total Revenue (Domestic and Foreigners):** This measures the revenue generation from the tourism industry.
+-   **Average Revenue per Tourist:**This helps assess the spending behavior of tourists.
 
 ::: panel-tabset
 ### 1. Data Wrangling
+
 The following sub-steps were further undertaken to transform the tourism dataset:
 
-- Created two new fields using `mutate()`: "Percentage of Tourists who are Foreigners" and "Average Revenue per Tourist"
-- Replace missing values in the two new fields with 0. The are missing values due to denominator being 0. We replaced the missing values with 0 on grounds that there were indeed no foreign tourists and no tourist expenditure, respectively. 
-- Selected the necessary variables for the study using `select()`, and simultaneously renamed `ratio_tourist_stay` to `occupancy_rate`.
+-   Created two new fields using `mutate()`: "Percentage of Tourists who are Foreigners" and "Average Revenue per Tourist"
+-   Replace missing values in the two new fields with 0. The are missing values due to denominator being 0. We replaced the missing values with 0 on grounds that there were indeed no foreign tourists and no tourist expenditure, respectively.
+-   Selected the necessary variables for the study using `select()`, and simultaneously renamed `ratio_tourist_stay` to `occupancy_rate`.
 
 ```{r}
 tourism2 <- tourism1 %>%
@@ -269,40 +317,49 @@ tourism2 <- tourism1 %>%
   select(c("date", "province", "no_tourist_all", "no_tourist_foreign", "percentage_foreign", "occupancy_rate" = "ratio_tourist_stay", "revenue_all", "revenue_per_tourist"))
 glimpse(tourism2)
 ```
+
 We checked that all columns do not have any missing values.
+
 ```{r}
 colMeans(is.na(tourism2))
 ```
+
 ### 2. EDA: Percentage of Foreign Tourists
+
 We see similar impact of COVID restrictions on the percentage of foreign tourists. However, it is also observed that this indicator had more fluctuations.
+
 ```{r}
 plot_ly(tourism2, x = ~date, y = ~percentage_foreign, color = ~province, type = 'scatter', mode = 'lines') %>%
   layout(title = "% Tourists who are Foreigners by Province (2019-2023)",
          xaxis = list(title = "Month"),
          yaxis = list(title = "% Tourists who are Foreigners"))
 ```
+
 ### 3. EDA: Revenue per Tourist
+
 On the other hand, we see that the revenue per tourist is generally stable, except for a spike in Apr 2020. We also observed that there was an increasing trend in expenditure for tourists visiting Phuket during post-Covid.
+
 ```{r}
 plot_ly(tourism2, x = ~date, y = ~revenue_per_tourist, color = ~province, type = 'scatter', mode = 'lines') %>%
   layout(title = "Revenue per Tourist by Province (2019-2023)",
          xaxis = list(title = "Month"),
          yaxis = list(title = "Revenue per Tourist"))
 ```
-
 :::
 
 ## 2.5. Cross-sectional Dataset
+
 For the cross-sectional analysis, we classified the monthly data into three distinct time periods based on the Thai government’s response to the COVID-19 pandemic (https://en.wikipedia.org/wiki/COVID-19_pandemic_in_Thailand):
 
-- **Pre-Covid (up to December 2019):** Prior to January 2020, Thailand experienced no significant impacts from COVID-19, as the virus had not yet spread globally. Economic and social activities proceeded as normal until the end of 2019.
-- **Covid (January 2020 to April 2022):** During this period, strict travel restrictions were imposed, significantly affecting tourism and related economic activities.
-- **Post-Covid (from May 2022 onward):** Starting May 1, 2022, fully vaccinated travelers no longer required RT-PCR tests upon arrival, and the Thailand Pass system remained in place. ATK testing became voluntary, signaling a shift toward relaxed travel regulations and a gradual return to normalcy.
+-   **Pre-Covid (up to December 2019):** Prior to January 2020, Thailand experienced no significant impacts from COVID-19, as the virus had not yet spread globally. Economic and social activities proceeded as normal until the end of 2019.
+-   **Covid (January 2020 to April 2022):** During this period, strict travel restrictions were imposed, significantly affecting tourism and related economic activities.
+-   **Post-Covid (from May 2022 onward):** Starting May 1, 2022, fully vaccinated travelers no longer required RT-PCR tests upon arrival, and the Thailand Pass system remained in place. ATK testing became voluntary, signaling a shift toward relaxed travel regulations and a gradual return to normalcy.
 
 ::: panel-tabset
 ### 1. Aggregation to Time Period
-We use `case_when()` to classify the months to the three time periods.
-We then use `group_by()` and `summarise()` to aggregate the variables by averaging the monthly data.
+
+We use `case_when()` to classify the months to the three time periods. We then use `group_by()` and `summarise()` to aggregate the variables by averaging the monthly data.
+
 ```{r}
 tourism_period <- tourism2 %>%
   mutate(period = case_when(date <= ymd("2019-12-01") ~ "Pre-covid",
@@ -317,8 +374,11 @@ tourism_period <- tourism2 %>%
   ungroup()
 glimpse(tourism_period)
 ```
+
 ### 2. Combining Datasets
+
 We use `left_join()` to combine the aggregated dataset to the geospatial dataset.
+
 ```{r}
 province_tourism_period <- provinces2 %>%
   left_join(tourism_period, by = "province") 
@@ -327,16 +387,19 @@ glimpse(province_tourism_period)
 :::
 
 # 3. Choropleth Map
-Choropleth maps were generated for all five tourism economic indicators to visualise: 
 
-- The spatial distribution of each indicator, and 
-- The impact of Covid on these economic metrics. 
+Choropleth maps were generated for all five tourism economic indicators to visualise:
+
+-   The spatial distribution of each indicator, and
+-   The impact of Covid on these economic metrics.
 
 All maps were created using the tmap package. To effectively compare the impact of Covid on the economic metrics across time periods, we applied the same Jenks classification for the pre-covid, covid, and post-covid periods.
 
 ::: panel-tabset
 ## 1. Total Number of Tourists
+
 The number of tourists declined significantly during the Covid period, followed by a recovery in the post-Covid phase. However, the recovery was uneven across provinces. While some provinces experienced a stronger rebound than their pre-Covid levels, others have yet to fully return to their pre-pandemic state.
+
 ```{r}
 #| code-fold: true
 breaks <- province_tourism_period %>%
@@ -386,7 +449,9 @@ tmap_arrange(pre_covid_map, covid_map, post_covid_map,
 ```
 
 ## 2. Percentage of Foreign Tourists
-Similar trends were observed for the percentage of foreign tourists. 
+
+Similar trends were observed for the percentage of foreign tourists.
+
 ```{r}
 #| code-fold: true
 breaks <- province_tourism_period %>%
@@ -436,7 +501,9 @@ tmap_arrange(pre_covid_map, covid_map, post_covid_map,
 ```
 
 ## 3. Occupancy Rate
+
 Occupancy rates were high during pre-covid and post-covid, although the occupancy rates during post-covid seem lower than pre-covid levels.
+
 ```{r}
 #| code-fold: true
 breaks <- province_tourism_period %>%
@@ -486,7 +553,9 @@ tmap_arrange(pre_covid_map, covid_map, post_covid_map,
 ```
 
 ## 4. Total Revenue
+
 Total revenue seems high for certain provinces with the majority of provinces having lower revenues. We see similar impact of covid, with total revenue during post-covid being lower than pre-covid levels for most provinces.
+
 ```{r}
 #| code-fold: true
 breaks <- province_tourism_period %>%
@@ -536,7 +605,9 @@ tmap_arrange(pre_covid_map, covid_map, post_covid_map,
 ```
 
 ## 5. Average Revenue per Tourist
+
 Similar impact of covid, with average spending per tourist during post-covid being lower than pre-covid level for most provinces.
+
 ```{r}
 #| code-fold: true
 breaks <- province_tourism_period %>%
@@ -584,43 +655,52 @@ post_covid_map <- province_tourism_period %>%
 tmap_arrange(pre_covid_map, covid_map, post_covid_map, 
              asp = NA, ncol = 3)
 ```
-## 6. Key Takeaway
-The choropleth maps and Exploratory Data Analysis show that tourism data during the covid and post-covid periods differ significantly from pre-covid levels. Therefore, it appears more appropriate to use the more stable pre-covid data to assess whether key indicators of Thailand’s tourism economy exhibit spatial dependency.
 
+## 6. Key Takeaway
+
+The choropleth maps and Exploratory Data Analysis show that tourism data during the covid and post-covid periods differ significantly from pre-covid levels. Therefore, it appears more appropriate to use the more stable pre-covid data to assess whether key indicators of Thailand’s tourism economy exhibit spatial dependency.
 :::
 
 # 4. Method to Identify Neighbours
+
 As mentioned in the key takeaway in previous section (3.6), we will use pre-covid data to assess whether key indicators of Thailand’s tourism economy exhibit spatial dependency. The following step used `filter()` to filter for pre-covid aggregated data.
 
 ```{r}
 province_tourism_pre <- province_tourism_period %>%
   filter(period == "Pre-covid")
 ```
+
 The following steps were undertaken to determine the most appropriate method for identifying provincial neighbors.
 
 ::: panel-tabset
 ## Queen Contiguity Neighbours
+
 Due to limitations in the `sfdep` package for computing Queen contiguity neighbors with our dataset, we used the `spdep` package instead. The `poly2nb()` function was employed to compute the Queen contiguity weight matrix. However, the summary revealed that one province had no neighbors, which would pose a problem for subsequent spatial and spatio-temporal analyses.
 
 As a result, we are unable to use this method for identifying provincial neighbors.
+
 ```{r}
 wm_q <- poly2nb(province_tourism_pre, queen=TRUE)
 summary(wm_q)
 ```
+
 The plot shows that Phuket was the province with no neighbours.
+
 ```{r}
 plot(province_tourism_pre$geometry, border="lightgrey")
 plot(wm_q, province_tourism_pre$centroid, pch = 19, cex = 0.6, add = TRUE, col= "red")
 ```
 
 ## Fixed Distance Neighbours
+
 Similarly, we used the `spdep` package to compute the fixed distance weight matrix, following these steps:
 
-- Extracted the coordinates of the provinces’ centroids using `pull()`.
-- Identified the first nearest neighbor for each province using `knn2nb()` in combination with `knearneigh()`.
-- Calculated the distance to the first nearest neighbor using `nbdists()`.
+-   Extracted the coordinates of the provinces’ centroids using `pull()`.
+-   Identified the first nearest neighbor for each province using `knn2nb()` in combination with `knearneigh()`.
+-   Calculated the distance to the first nearest neighbor using `nbdists()`.
 
 The summary revealed that the largest first nearest neighbor distance was 110,987 meters. Setting this as the upper threshold ensures that every province will have at least one neighbor.
+
 ```{r}
 coords <- province_tourism_pre %>% 
   pull(centroid)
@@ -631,6 +711,7 @@ summary(first_nearest_neighbour_distance)
 ```
 
 The `dnearneigh()` function was employed to compute the fixed distance weight matrix. The summary revealed that one province had no neighbors, and several others only had 1 or 2 neighbours. This too would pose a problem for subsequent spatial and spatio-temporal analyses.
+
 ```{r}
 wm_fixed_d <- dnearneigh(coords, 0, 110000)
 summary(wm_fixed_d)
@@ -641,8 +722,11 @@ plot(province_tourism_pre$geometry, border="lightgrey")
 plot(wm_fixed_d, coords, add=TRUE)
 plot(first_nearest_neighbour, coords, add=TRUE, col="red", length=0.08)
 ```
+
 ## Adaptive Distance Neighbours
+
 We use `sfdep` package to compute the adapative distance weight matrix. We use `st_knn()` on the centroids, specifying 4 neighbours for each province. We then compute the inverse distance weights using `st_inverse_distance()` function.
+
 ```{r}
 wm_adapt_d <- province_tourism_pre %>%
   mutate(nb = st_knn(centroid, k = 4),
@@ -650,7 +734,9 @@ wm_adapt_d <- province_tourism_pre %>%
          .before = "geometry")
 glimpse(wm_adapt_d)
 ```
+
 The plot shows that each province is connected to four nearest neighbours, which makes it ideal for subsequent spatial and spatio-temporal analyses.
+
 ```{r}
 plot(wm_adapt_d$geometry, border="lightgrey")
 plot(wm_adapt_d$nb, wm_adapt_d$centroid, pch = 19, cex = 0.6, add = TRUE, col = "red")
@@ -658,6 +744,7 @@ plot(wm_adapt_d$nb, wm_adapt_d$centroid, pch = 19, cex = 0.6, add = TRUE, col = 
 :::
 
 # 5. Global Measures of Spatial Autocorrelation
+
 In this section, I conducted both global Moran I's and Geary's C statistical testing.
 
 I employed the Global Moran’s I permutation test (global_moran_perm) and Global Geary's C permutation test (global_c_perm) to assess spatial autocorrelation. While both the standard Moran’s I and Geary's C test (global_moran_test, global_c_test) and the permutation tests evaluate the same hypothesis, the permutation methods are more robust. It generates an empirical distribution through multiple simulations, making it less reliant on assumptions about the underlying data distribution. Thus, the standard Moran’s I and Geary's C tests were omitted to avoid redundancy, as the permutation tests offer superior statistical inference.
@@ -666,60 +753,80 @@ The Moran I's permutation tests were to assess whether the provincial indicators
 
 ::: panel-tabset
 ## 5.1 Total Number of Tourists
+
 From the results, the observed Moran’s I statistic is -0.003, which is less than 0, indicating negative spatial autocorrelation. However, since the p-value is 0.75, the result is non-statistically significant, indicating that the total number of tourists are arranged randomly over space.
+
 ```{r}
 set.seed(1234)
 global_moran_perm(wm_adapt_d$avg_no_tourist_all, wm_adapt_d$nb, wm_adapt_d$wt, nsim = 999)
 ```
+
 From the results, the observed Geary's C statistic is 2.3239, which is more than 1, indicating dispersed observations. However, since the p-value is 0.988, the result is non-statistically significant, indicating that the total number of tourists are arranged randomly over space.
+
 ```{r}
 set.seed(1234)
 global_c_perm(wm_adapt_d$avg_no_tourist_all, wm_adapt_d$nb, wm_adapt_d$wt, nsim = 999)
 ```
 
 ## 5.2 Percentage of Foreign Tourists
-The observed Moran’s I statistic is 0.413, which is more than 0. Since the p-value is < 0.05, the result is statistically significant, indicating that the percentage of foreign tourists are clustered and tend to be similar.
+
+The observed Moran’s I statistic is 0.413, which is more than 0. Since the p-value is \< 0.05, the result is statistically significant, indicating that the percentage of foreign tourists are clustered and tend to be similar.
+
 ```{r}
 set.seed(1234)
 global_moran_perm(wm_adapt_d$avg_percentage_foreign, wm_adapt_d$nb, wm_adapt_d$wt, nsim = 999)
 ```
-The observed Geary's C statistic is 0.514, which is less than 1. Since the p-value is < 0.05, the result is statistically significant, indicating that the percentage of foreign tourists are clustered and tend to be similar.
+
+The observed Geary's C statistic is 0.514, which is less than 1. Since the p-value is \< 0.05, the result is statistically significant, indicating that the percentage of foreign tourists are clustered and tend to be similar.
+
 ```{r}
 set.seed(1234)
 global_c_perm(wm_adapt_d$avg_percentage_foreign, wm_adapt_d$nb, wm_adapt_d$wt, nsim = 999)
 ```
 
 ## 5.3 Occupancy Rate
+
 The observed I statistic is 0.149, which is more than 0. Since the p-value is 0.052, the result is non-statistically significant, indicating that the occupancy rates are arranged randomly over space.
+
 ```{r}
 set.seed(1234)
 global_moran_perm(wm_adapt_d$avg_occupancy_rate, wm_adapt_d$nb, wm_adapt_d$wt, nsim = 999)
 ```
-The observed C statistic is 0.974, which is less than 1. Since the p-value is > 0.05, the result is non-statistically significant, indicating that the occupancy rates are arranged randomly over space.
+
+The observed C statistic is 0.974, which is less than 1. Since the p-value is \> 0.05, the result is non-statistically significant, indicating that the occupancy rates are arranged randomly over space.
+
 ```{r}
 set.seed(1234)
 global_c_perm(wm_adapt_d$avg_occupancy_rate, wm_adapt_d$nb, wm_adapt_d$wt, nsim = 999)
 ```
 
 ## 5.4 Total Revenue
-The observed I statistic is -0.038, which is less than 1. Since the p-value is > 0.05, the result is non-statistically significant, indicating that total revenue is arranged randomly over space.
+
+The observed I statistic is -0.038, which is less than 1. Since the p-value is \> 0.05, the result is non-statistically significant, indicating that total revenue is arranged randomly over space.
+
 ```{r}
 set.seed(1234)
 global_moran_perm(wm_adapt_d$avg_revenue_all, wm_adapt_d$nb, wm_adapt_d$wt, nsim = 999)
 ```
-The observed C statistic is 2.272, which is more than 1. Since the p-value is > 0.05, the result is non-statistically significant, indicating that total revenue is arranged randomly over space.
+
+The observed C statistic is 2.272, which is more than 1. Since the p-value is \> 0.05, the result is non-statistically significant, indicating that total revenue is arranged randomly over space.
+
 ```{r}
 set.seed(1234)
 global_c_perm(wm_adapt_d$avg_revenue_all, wm_adapt_d$nb, wm_adapt_d$wt, nsim = 999)
 ```
 
 ## 5.5 Average Revenue per Tourist
-The observed Moran’s I statistic is 0.297, which is more than 0. Since the p-value is < 0.05, the result is statistically significant, indicating that the average revenue per tourist is clustered and tend to be similar.
+
+The observed Moran’s I statistic is 0.297, which is more than 0. Since the p-value is \< 0.05, the result is statistically significant, indicating that the average revenue per tourist is clustered and tend to be similar.
+
 ```{r}
 set.seed(1234)
 global_moran_perm(wm_adapt_d$avg_revenue_per_tourist, wm_adapt_d$nb, wm_adapt_d$wt, nsim = 999)
 ```
-The observed Geary's C statistic is 0.662, which is less than 1. Since the p-value is < 0.05, the result is statistically significant, indicating that the average revenue per tourist is clustered and tend to be similar.
+
+The observed Geary's C statistic is 0.662, which is less than 1. Since the p-value is \< 0.05, the result is statistically significant, indicating that the average revenue per tourist is clustered and tend to be similar.
+
 ```{r}
 set.seed(1234)
 global_c_perm(wm_adapt_d$avg_revenue_per_tourist, wm_adapt_d$nb, wm_adapt_d$wt, nsim = 999)
@@ -727,18 +834,20 @@ global_c_perm(wm_adapt_d$avg_revenue_per_tourist, wm_adapt_d$nb, wm_adapt_d$wt, 
 :::
 
 # 6. Local Moran's I and LISA
+
 Local Moran’s I and Local Indicators of Spatial Association (LISA) are key tools used to identify spatial patterns at the local level, allowing us to detect clusters of similar values (hot/cold spots) and spatial outliers. In this study, these local measures of spatial autocorrelation are employed to examine whether key tourism economic indicators exhibit spatial dependency across Thailand’s provinces. By using Local Moran’s I and LISA, we can identify regions where tourism trends are clustered or where provinces deviate from their neighbors.
 
-The `sfdep` package was used to compute the local Moran's I and the LISA quandrant. 1000 simulations were conducted and the alpha value is set at 0.05. Seed is set to ensure reproducibility of results.
-The `tmap` package was used to plot three chropleth maps for each economic indicator:
+The `sfdep` package was used to compute the local Moran's I and the LISA quandrant. 1000 simulations were conducted and the alpha value is set at 0.05. Seed is set to ensure reproducibility of results. The `tmap` package was used to plot three chropleth maps for each economic indicator:
 
-- Local Moran's I
-- p-value of local Moran's I
-- LISA map
+-   Local Moran's I
+-   p-value of local Moran's I
+-   LISA map
 
 ::: panel-tabset
 ## 6.1 Total Number of Tourists
+
 With regards to the total number of tourists, LISA map reveals that there were a few provinces of outliers (i.e. negative autocorrelation) who are low-high (low outlier among high neighbours) and high-low (high outlier among low neighbours). We also observed some clusters of low-low (low surrounded by low neighbours).
+
 ```{r}
 set.seed(1234)
 lisa_total_tourist <- wm_adapt_d %>%
@@ -785,8 +894,11 @@ map3 <- tm_shape(lisa_total_tourist) +
 
 tmap_arrange(map1, map2, map3, ncol=3)
 ```
+
 ## 6.2 Percentage of Foreign Tourists
+
 With regards to the percentage of foreign tourists, LISA map reveals several clusters of high-high and low-low, with a few outliers of low-high. The high-high clusters occur in the south of Thailand, while the low-low clusters occur in the central and west of Thailand.
+
 ```{r}
 set.seed(1234)
 lisa_pct_foreign <- wm_adapt_d %>%
@@ -833,8 +945,11 @@ map3 <- tm_shape(lisa_pct_foreign) +
 
 tmap_arrange(map1, map2, map3, ncol=3)
 ```
+
 ## 6.3 Occupancy Rate
+
 With regards to occupancy rate, LISA map reveals several outliers of low-high and high-low, with some areas of low-low clusters.
+
 ```{r}
 set.seed(1234)
 lisa_occupancy_rate <- wm_adapt_d %>%
@@ -881,8 +996,11 @@ map3 <- tm_shape(lisa_occupancy_rate) +
 
 tmap_arrange(map1, map2, map3, ncol=3)
 ```
+
 ## 6.4 Total Revenue
+
 With regards to total revenue, LISA map reveals several clusters of low-low provinces, with a few outliers of low-high. Low-low clusters occur in central and east of Thailand.
+
 ```{r}
 set.seed(1234)
 lisa_revenue <- wm_adapt_d %>%
@@ -929,8 +1047,11 @@ map3 <- tm_shape(lisa_revenue) +
 
 tmap_arrange(map1, map2, map3, ncol=3)
 ```
+
 ## 6.5 Average Revenue per Tourist
+
 With regards to average revenue per tourist, LISA map reveals several clusters of low-low provinces and high-high provinces with no outliers. The high-high clusters occur in the south of Thailand, while the low-low clusters occur in the central and east of Thailand.
+
 ```{r}
 set.seed(1234)
 lisa_revenue_per_tourist <- wm_adapt_d %>%
@@ -980,18 +1101,20 @@ tmap_arrange(map1, map2, map3, ncol=3)
 :::
 
 # 7. Gi Test & Hot/Cold Spot Analysis
+
 The Gi test and hot/cold spot analysis are methods for identifying statistically significant clusters of high (hot spots) and low (cold spots) values in spatial data, revealing regions where tourism indicators are either concentrated or lagging. By excluding the self-location in the Gi test, the analysis focuses on the spatial influence and spillover effects from surrounding areas, rather than the province’s own value. This exclusion helps prevent local high or low values from biasing the results.
 
-Similarly, the `sfdep` package was used to compute the local Gi and classify hot/cold spots. 1000 simulations were conducted and the alpha value is set at 0.05. Seed is set to ensure reproducibility of results.
-The `tmap` package was used to plot three chropleth maps for each economic indicator:
+Similarly, the `sfdep` package was used to compute the local Gi and classify hot/cold spots. 1000 simulations were conducted and the alpha value is set at 0.05. Seed is set to ensure reproducibility of results. The `tmap` package was used to plot three chropleth maps for each economic indicator:
 
-- Local Gi statistic
-- p-value of local Gi
-- Hot/cold spot analysis map
+-   Local Gi statistic
+-   p-value of local Gi
+-   Hot/cold spot analysis map
 
 ::: panel-tabset
 ## 7.1 Total Number of Tourists
+
 With regards to the total number of tourists, one hot spot was detected and several cold spots were detected in the central and east of Thailand.
+
 ```{r}
 set.seed(1234)
 HCSA_total_tourist <- wm_adapt_d %>%
@@ -1037,8 +1160,11 @@ map3 <- tm_shape(HCSA_total_tourist) +
 
 tmap_arrange(map1, map2, map3, ncol=3)
 ```
+
 ## 7.2 Percentage of Foreign Tourists
+
 With regards to the percentage of foreign tourists, cold spots were detected in central/west of Thailand, while hot spots were detected in southern Thailand.
+
 ```{r}
 set.seed(1234)
 HCSA_pct_foreign <- wm_adapt_d %>%
@@ -1086,7 +1212,9 @@ tmap_arrange(map1, map2, map3, ncol=3)
 ```
 
 ## 7.3 Occupancy Rate
+
 With regards to the occupancy rate, hot spots were detected in Phuket and west of Thailand, while cold spots were detected in northern Thailand.
+
 ```{r}
 set.seed(1234)
 HCSA_occupancy_rate <- wm_adapt_d %>%
@@ -1132,8 +1260,11 @@ map3 <- tm_shape(HCSA_occupancy_rate) +
 
 tmap_arrange(map1, map2, map3, ncol=3)
 ```
+
 ## 7.4 Total Revenue
+
 With regards to the total revenue, cold spots were detected in central and east of Thailand.
+
 ```{r}
 set.seed(1234)
 HCSA_revenue <- wm_adapt_d %>%
@@ -1181,7 +1312,9 @@ tmap_arrange(map1, map2, map3, ncol=3)
 ```
 
 ## 7.5 Average Revenue per Tourist
+
 With regards to the average revenue per tourist, cold spots were detected in central and east of Thailand, while hot spots were detected in southern Thailand.
+
 ```{r}
 set.seed(1234)
 HCSA_revenue_per_tourist <- wm_adapt_d %>%
@@ -1230,9 +1363,11 @@ tmap_arrange(map1, map2, map3, ncol=3)
 :::
 
 # 8. Emerging Hot Spot Analysis
-Emerging Hot Spot Analysis is used to identify trends and changes in spatial patterns over time, particularly for detecting areas where significant increases (emerging hot spots) or decreases (emerging cold spots) in activity are occurring. In this study, Emerging Hot Spot Analysis is employed to track shifts in key tourism economic indicators across Thailand’s provinces. 
 
-We will use monthly data for the emerging hot spot analysis. A spacetime cube is created using `spacetime()`. 
+Emerging Hot Spot Analysis is used to identify trends and changes in spatial patterns over time, particularly for detecting areas where significant increases (emerging hot spots) or decreases (emerging cold spots) in activity are occurring. In this study, Emerging Hot Spot Analysis is employed to track shifts in key tourism economic indicators across Thailand’s provinces.
+
+We will use monthly data for the emerging hot spot analysis. A spacetime cube is created using `spacetime()`.
+
 ```{r}
 tourism_st <- spacetime(tourism2, # attribute datafile
                         provinces2, # geospatial datefile
@@ -1243,6 +1378,7 @@ is_spacetime_cube(tourism_st)
 ```
 
 We then compute the adapative distance weights (4 neighbours excluding self) in the spacetime cube.
+
 ```{r}
 tourism_nb <- tourism_st %>%
   activate("geometry") %>%
@@ -1259,7 +1395,9 @@ We then join the results to the geospatial sf dataframe, so that we could plot t
 
 ::: panel-tabset
 ## 8.1 Total Number of Tourists
-Based on the emerging hot spot map, most provinces have patterns that were unclassified (does not fall into any identified patterns). There were some consecutive cold spots (uninterrupted run of cold spots in final time periods), one province with intensifying cold spot (historically cold but becoming colder), and some oscillating hot spots (historically cold spot but become hotspot in the final period). 
+
+Based on the emerging hot spot map, most provinces have patterns that were unclassified (does not fall into any identified patterns). There were some consecutive cold spots (uninterrupted run of cold spots in final time periods), one province with intensifying cold spot (historically cold but becoming colder), and some oscillating hot spots (historically cold spot but become hotspot in the final period).
+
 ```{r}
 set.seed(1234)
 ehsa_total_tourist <- emerging_hotspot_analysis(x = tourism_st,
@@ -1288,8 +1426,11 @@ tm_shape(ehsa_total_tourist2) +
   tm_layout(main.title = "Emerging Hotspot Analysis on Total Number of Tourists",
             main.title.size = 1)
 ```
+
 ## 8.2 Percentage of Foreign Tourists
+
 For percentage of foreign tourists, a number of provinces have patterns that were unclassified (does not fall into any identified patterns). There were some oscillating hot spots (historically cold spot but become hotspot in the final period), sporadic hot spots (on-and-off hot spots over time but never cold spots), and some sporadic cold spots.
+
 ```{r}
 set.seed(1234)
 ehsa_pct_foreign <- emerging_hotspot_analysis(x = tourism_st,
@@ -1320,7 +1461,9 @@ tm_shape(ehsa_pct_foreign2) +
 ```
 
 ## 8.3 Occupancy Rate
+
 For occupancy rate, a few provinces have patterns that were unclassified (does not fall into any identified patterns). There were some oscillating cold spots (historically hot spot but become cold spot in the final period) and oscillating hot spots.
+
 ```{r}
 set.seed(1234)
 ehsa_occupancy_rate <- emerging_hotspot_analysis(x = tourism_st,
@@ -1351,7 +1494,9 @@ tm_shape(ehsa_occupancy_rate2) +
 ```
 
 ## 8.4 Total Revenue
+
 For total revenue, a number of provinces have patterns that were unclassified (does not fall into any identified patterns). There were some consecutive cold spots (uninterrupted run of cold spots in final time periods), intensifying cold spot (historically cold but becoming colder), and oscillating cold spots (historically hot spot but become cold spot in the final period).
+
 ```{r}
 set.seed(1234)
 ehsa_revenue <- emerging_hotspot_analysis(x = tourism_st,
@@ -1381,9 +1526,10 @@ tm_shape(ehsa_revenue2) +
             main.title.size = 1)
 ```
 
-
 ## 8.5 Average Revenue per Tourist
+
 This analysis could not be run due to the presence of zeros in several months.
+
 ```{r}
 #| eval: false
 set.seed(1234)
@@ -1397,8 +1543,8 @@ ehsa_revenue_per_tourist <- emerging_hotspot_analysis(x = tourism_st,
 ehsa_revenue_per_tourist2 <- provinces2 %>%
   left_join(ehsa_revenue_per_tourist, by = c("province" = "location"))
 ```
-
 :::
 
 # 9. Conclusion
-This study successfully examined the spatial and spatio-temporal dependencies of Thailand’s tourism economy. By analysing key tourism indicators (such as total number of tourists, occupancy rates, and revenue), we identified clear patterns of both spatial and spatio-temporal dependencies at the provincial level. The use of Local Moran’s I, LISA, Gi test, and Emerging Hot Spot Analysis enabled the detection of clusters, outliers, and emerging trends, highlighting both areas of recovery and continued struggles across several provinces. Notably, a few hot spots were identified for certain indicators during the later period in post-covid, particularly the number of tourists, percentage of foreign tourists, and occupancy rates. 
+
+This study successfully examined the spatial and spatio-temporal dependencies of Thailand’s tourism economy. By analysing key tourism indicators (such as total number of tourists, occupancy rates, and revenue), we identified clear patterns of both spatial and spatio-temporal dependencies at the provincial level. The use of Local Moran’s I, LISA, Gi test, and Emerging Hot Spot Analysis enabled the detection of clusters, outliers, and emerging trends, highlighting both areas of recovery and continued struggles across several provinces. Notably, a few hot spots were identified for certain indicators during the later period in post-covid, particularly the number of tourists, percentage of foreign tourists, and occupancy rates.
