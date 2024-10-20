@@ -13,6 +13,7 @@ execute:
 ---
 
 # Overview
+
 In this in-class exercise, we will use R’s `GWmodel` package for spatial weight analysis. One key feature we will explore is the **geographically weighted summary statistics**.
 
 ```{r}
@@ -20,34 +21,43 @@ pacman::p_load(sf, ggstatsplot, tmap, tidyverse, knitr, GWmodel)
 ```
 
 # 1. Importing & Transforming Data
+
 Two datasets will be used in this in-class exercise:
 
-- **Hunan County Boundary Layer**: A geospatial dataset in ESRI shapefile format.
-- **Hunan_2012.csv**: A CSV file containing selected local development indicators for Hunan in 2012.
+-   **Hunan County Boundary Layer**: A geospatial dataset in ESRI shapefile format.
+-   **Hunan_2012.csv**: A CSV file containing selected local development indicators for Hunan in 2012.
 
 ::: panel-tabset
 ## Hunan shapefile
+
 In this in-class exercise, there’s no need to convert the Geographical Coordinate System to a projected coordinate system. The package used for calculating distances between neighbors automatically converts the Geographical Coordinate System into kilometers.
+
 ```{r}
 hunan_sf <- st_read(dsn = "data/geospatial", 
                  layer = "Hunan") 
 ```
 
 ## Hunan 2012 development indicators
+
 ```{r}
 hunan2012 <- read_csv("data/aspatial/Hunan_2012.csv")
 glimpse(hunan2012)
 ```
 
 ## Combining datasets
+
 Some development indicators from `hunan2012` are needed to be added into hunan's sf dataframe. The datasets are joined by **County**. You need to select the variables of interest in your dataset and drop all others before you start your analysis.
+
 ```{r}
 hunan_sf <- left_join(hunan_sf, hunan2012, by = "County") %>%
   select(1:3, 7, 15, 16, 31, 32)
 glimpse(hunan_sf)
 ```
+
 ## Converting to SpatialPolygonDataFrame
+
 The `GWmodel` package is currently designed to work with the older `sp` format rather than the newer `sf` format for handling spatial data in R. Thus, we need to convert it to the `sp` format.
+
 ```{r}
 hunan_sp <- hunan_sf %>%
   as_Spatial()
@@ -55,12 +65,14 @@ hunan_sp <- hunan_sf %>%
 :::
 
 # 2. Geographically Weighted Summary Statistics with Adaptive Bandwidth
+
 We need to determine adapative bandwidth. There are two methods:
 
 ::: panel-tabset
 ## 2.1 Cross-validation
-This is based on regression. GDPPC is the dependent variable, and 1 as the arbitary independent variable. 
-Since we are using Geographical Coordinate System which is in degre, we set `longlat = TRUE`, and it will calculate great circle distances in kilometer.
+
+This is based on regression. GDPPC is the dependent variable, and 1 as the arbitary independent variable. Since we are using Geographical Coordinate System which is in degre, we set `longlat = TRUE`, and it will calculate great circle distances in kilometer.
+
 ```{r}
 bw_CV <- bw.gwr(GDPPC ~ 1,
                 data = hunan_sp,
@@ -69,13 +81,17 @@ bw_CV <- bw.gwr(GDPPC ~ 1,
                 kernel = "bisquare",
                 longlat = TRUE)
 ```
+
 This is the number of nearest neighbours that you should choose.
+
 ```{r}
 bw_CV
 ```
 
 ## 2.2 AIC
+
 Choose the adapative bandwidth with the least AIC value.
+
 ```{r}
 bw_AIC <- bw.gwr(GDPPC ~ 1,
                 data = hunan_sp,
@@ -84,18 +100,21 @@ bw_AIC <- bw.gwr(GDPPC ~ 1,
                 kernel = "bisquare",
                 longlat = TRUE)
 ```
-This is the number of nearest neighbours that you should choose, which is the same result from the cross-validation method.
-Sometimes the result may differ, both methods are acceptable.
+
+This is the number of nearest neighbours that you should choose, which is the same result from the cross-validation method. Sometimes the result may differ, both methods are acceptable.
+
 ```{r}
 bw_AIC
 ```
 :::
 
 # 3. Geographically Weighted Summary Statistics with Fixed Bandwidth
+
 We need to determine fixed bandwidth.
 
 ::: panel-tabset
 ## 3.1 Cross-validation
+
 ```{r}
 bw_CV <- bw.gwr(GDPPC ~ 1,
                 data = hunan_sp,
@@ -119,9 +138,11 @@ bw_AIC <- bw.gwr(GDPPC ~ 1,
                 kernel = "bisquare",
                 longlat = TRUE)
 ```
+
 This is more than twice the fixed bandwidth based on cross-validation method. You need to compare and choose the one that is more sensible/meaningful. In this case, it may be better to use adaptive bandwidth method as their CV and AIC methods yield similar results.
 
 When the bandwidth is shorter, the output will be spikier. When the bandwidth is longer, the output will be smoother.
+
 ```{r}
 bw_AIC
 ```
@@ -138,12 +159,15 @@ gwstat <- gwss(data = hunan_sp,
                longlat = TRUE)
 ```
 
-GDPPC_LM is the local mean of the variable within the local neighbourhood (taking the 22 neighbours to compute the mean). _LSD is the standard deviation. _LVar is the variance. _LSKe is the Local Skewness. _LCV is the Local Coefficient of Variation.
+GDPPC_LM is the local mean of the variable within the local neighbourhood (taking the 22 neighbours to compute the mean). \_LSD is the standard deviation. \_LVar is the variance. \_LSKe is the Local Skewness. \_LCV is the Local Coefficient of Variation.
+
 ```{r}
 gwstat_df <- as.data.frame(gwstat$SDF)
 glimpse(gwstat_df)
 ```
+
 You can use `cbind` (i.e. column join) as long as you did not do any programmatically sorting.
+
 ```{r}
 hunan_gstat <- cbind(hunan_sf, gwstat_df)
 glimpse(hunan_gstat)
@@ -165,9 +189,11 @@ tm_shape(hunan_gstat) + # display all polygons
 ```
 
 # 5. Geographically Weighted Correlation with Adaptive Bandwidth
+
 **Business question:** Is there any relationship between GDP per capita and Gross Industry Output?
 
 ## 5.1 Conventional Statistical Solution
+
 The conventional approach to correlation involves calculating the relationship between two variables without considering geographic factors. While useful, this method is limited because it doesn’t reveal how the correlation varies across a region or how it may be influenced by neighboring areas.
 
 ```{r}
@@ -186,8 +212,8 @@ ggscatterstats(
 ```
 
 ## 5.2 Geospatial Analytical Solution
-A geospatial approach, such as geographically weighted correlation (GWC), adds deeper insights by accounting for spatial variability.
-To perform GWC, we first determine the appropriate bandwidth, then compute the geographically weighted correlation, and finally append the results to the `hunan_sf` data frame. 
+
+A geospatial approach, such as geographically weighted correlation (GWC), adds deeper insights by accounting for spatial variability. To perform GWC, we first determine the appropriate bandwidth, then compute the geographically weighted correlation, and finally append the results to the `hunan_sf` data frame.
 
 ```{r}
 # Step 1: Determining the bandwidth
@@ -218,7 +244,9 @@ hunan_Corr <- cbind(hunan_sf, gwstat_df)
 ```
 
 ## 5.3 Visualising Local Correlation using Spearman Rho
+
 We use **Spearman’s Rho** because it is a non-parametric statistic, making it robust for handling non-linear relationships and ranked data.
+
 ```{r}
 tm_shape(hunan_Corr) +
   tm_fill("gwSpearman",
@@ -233,4 +261,3 @@ tm_shape(hunan_Corr) +
             legend.width = 0.6,
             frame = TRUE)
 ```
-

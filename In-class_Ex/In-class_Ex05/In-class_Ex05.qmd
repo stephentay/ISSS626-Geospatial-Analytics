@@ -12,8 +12,8 @@ execute:
   freeze: true 
 ---
 
-
 # Overview
+
 In this in-class exercise, we will use R’s `sfdep` package for global and local measures of spatial association analysis.
 
 ```{r}
@@ -21,26 +21,31 @@ pacman::p_load(sf, sfdep, tmap, tidyverse)
 ```
 
 # 1. Importing & Transforming Data
+
 Two datasets will be used in this in-class exercise:
 
-- **Hunan County Boundary Layer**: A geospatial dataset in ESRI shapefile format.
-- **Hunan_2012.csv**: A CSV file containing selected local development indicators for Hunan in 2012.
+-   **Hunan County Boundary Layer**: A geospatial dataset in ESRI shapefile format.
+-   **Hunan_2012.csv**: A CSV file containing selected local development indicators for Hunan in 2012.
 
 ::: panel-tabset
 ## Hunan shapefile
+
 In this in-class exercise, there’s no need to convert the Geographical Coordinate System to a projected coordinate system. The package used for calculating distances between neighbors automatically converts the Geographical Coordinate System into kilometers.
+
 ```{r}
 hunan_sf <- st_read(dsn = "data/geospatial", 
                  layer = "Hunan") 
 ```
 
 ## Hunan 2012 development indicators
+
 ```{r}
 hunan2012 <- read_csv("data/aspatial/Hunan_2012.csv")
 glimpse(hunan2012)
 ```
 
 ## Combining datasets
+
 Some development indicators from `hunan2012` are needed to be added into hunan's sf dataframe. The datasets are joined by **County**. You need to select the variables of interest in your dataset and drop all others before you start your analysis.
 
 ```{r}
@@ -48,10 +53,10 @@ hunan_gdppc <- left_join(hunan_sf, hunan2012, by = "County") %>%
   select(1:4, 7, 15)
 glimpse(hunan_gdppc)
 ```
-
 :::
 
 # 2. Plotting a Choropleth Map
+
 ```{r}
 tmap_mode('plot')
 tm_shape(hunan_gdppc) +
@@ -67,7 +72,9 @@ tmap_mode('plot')
 ```
 
 # 3. Global Measures of Spatial Association
+
 ## Deriving Queen's contiguity weights
+
 ```{r}
 wm_q <- hunan_gdppc %>%
   mutate(nb = st_contiguity(geometry),
@@ -76,34 +83,42 @@ wm_q <- hunan_gdppc %>%
 
 glimpse(wm_q)
 ```
+
 ## Computing Global Moran's I
+
 ```{r}
 moranI <- global_moran(wm_q$GDPPC, wm_q$nb, wm_q$wt)
 glimpse(moranI)
 ```
 
 ## Performing Global Moran's I Test
+
 From the results, Moran’s I is 0.30, which is greater than 0, indicating positive spatial autocorrelation (although it is a relative weak autocorrelation). Since the p-value is less than .001, the result is statistically significant. This means that the observations are not randomly distributed but are spatially clustered, with similar values tending to be near each other.
+
 ```{r}
 global_moran_test(wm_q$GDPPC, wm_q$nb, wm_q$wt)
 ```
+
 ## Performing Global Moran’s I Permutation Test
+
 ```{r}
 set.seed(1234)
 global_moran_perm(wm_q$GDPPC, wm_q$nb, wm_q$wt, nsim = 999)
 ```
+
 # 4. Local Measures of Spatial Autocorrelation
 
 ## Computing Local Moran's I
+
 We compute local Moran's I of GDPPC at county level by using `local_moran()` of `sfdep` package.
 
-- ii: The local Moran’s I statistic.
-- eii: The expected value of the local Moran’s I under the randomization hypothesis.
-- var_ii: The variance of the local Moran’s I under the randomization hypothesis.
-- z_ii: The standardized value (z-score) of the local Moran’s I.
-- p_ii_sim: The p-value of the local Moran’s I, indicating the statistical significance.
-- p_folded_sim: The p-value based on pysal.
-- mean / median / pysal: quandrant labels. You can use mean if your variable is normally distributed, otherwise use median.
+-   ii: The local Moran’s I statistic.
+-   eii: The expected value of the local Moran’s I under the randomization hypothesis.
+-   var_ii: The variance of the local Moran’s I under the randomization hypothesis.
+-   z_ii: The standardized value (z-score) of the local Moran’s I.
+-   p_ii_sim: The p-value of the local Moran’s I, indicating the statistical significance.
+-   p_folded_sim: The p-value based on pysal.
+-   mean / median / pysal: quandrant labels. You can use mean if your variable is normally distributed, otherwise use median.
 
 ```{r}
 lisa <- wm_q %>%
@@ -112,7 +127,6 @@ lisa <- wm_q %>%
   unnest(local_moran)
 glimpse(lisa)
 ```
-
 
 ```{r}
 tmap_mode('plot')
@@ -132,7 +146,9 @@ tm_shape(lisa) +
   tm_layout(main.title = "p-value of Local Moran's I",
             main.title.size = 1)
 ```
+
 ## Visualisation Local Moran's I and p-value
+
 ```{r}
 map1 <- tm_shape(lisa) +
   tm_fill("ii") +
@@ -151,7 +167,9 @@ map2 <- tm_shape(lisa) +
 
 tmap_arrange(map1, map2, ncol=2)
 ```
+
 ## Visualising LISA Map
+
 ```{r}
 lisa_sig <- lisa %>%
   filter(p_ii < 0.05)
@@ -163,7 +181,9 @@ tm_shape(lisa) +
   tm_fill("mean") +
   tm_borders(alpha = 0.4)
 ```
-## Computing Local Gi* Statistics
+
+## Computing Local Gi\* Statistics
+
 ```{r}
 wm_idw <- hunan_gdppc %>%
   mutate(nb = include_self(
@@ -172,7 +192,9 @@ wm_idw <- hunan_gdppc %>%
     .before = 1)
 glimpse(wm_idw)
 ```
-## Computing Local Gi* Statistics
+
+## Computing Local Gi\* Statistics
+
 ```{r}
 HCSA <- wm_idw %>%
   mutate(local_Gi = local_gstar_perm(
@@ -181,7 +203,9 @@ HCSA <- wm_idw %>%
   unnest(local_Gi)
 HCSA
 ```
-## Visualising Gi*
+
+## Visualising Gi\*
+
 ```{r}
 tmap_mode("plot")
 tm_shape(HCSA) +
@@ -191,6 +215,7 @@ tm_shape(HCSA) +
 ```
 
 ## Visualising p-value of HCSA
+
 ```{r}
 tmap_mode("plot")
 tm_shape(HCSA) +
@@ -199,6 +224,7 @@ tm_shape(HCSA) +
 ```
 
 ## Visualising Hot Spot and Cold Spot Areas
+
 ```{r}
 HCSA_sig <- HCSA %>%
   filter(p_sim < 0.05)
@@ -231,4 +257,3 @@ tm_shape(HCSA) +
 ```{r}
 
 ```
-
