@@ -12,16 +12,18 @@ execute:
 ---
 
 # 1. Overview
+
 **Geospatial predictive modeling** is based on the understanding that events or phenomena are not randomly or uniformly distributed across space. Instead, their occurrences are influenced by a variety of geospatial factors such as infrastructure, sociocultural dynamics, topography, and environmental conditions. These factors constrain and shape where events are likely to occur. Geospatial predictive modeling aims to capture these influences by analysing the spatial correlations between historical event locations and the environmental variables that represent these constraints and influences.
 
 In this exercise, we will undertake the following steps to build a predictive model using the geographical random forest method:
 
-- **Prepare Train and Test Datasets** using appropriate data sampling methods.
-- **Calibrate Predictive Models** using both geospatial statistical learning and machine learning methods.
-- **Compare and Select the Best Model** which provides the most accurate predictions.
-- **Predict Future Outcomes** using the best-calibrated model.
+-   **Prepare Train and Test Datasets** using appropriate data sampling methods.
+-   **Calibrate Predictive Models** using both geospatial statistical learning and machine learning methods.
+-   **Compare and Select the Best Model** which provides the most accurate predictions.
+-   **Predict Future Outcomes** using the best-calibrated model.
 
 The following R packages will be used in geospatial predictive modelling.
+
 ```{r}
 pacman::p_load(sf, spdep, GWmodel, SpatialML, tmap, rsample, Metrics, tidyverse)
 ```
@@ -30,16 +32,19 @@ pacman::p_load(sf, spdep, GWmodel, SpatialML, tmap, rsample, Metrics, tidyverse)
 
 ::: panel-tabset
 ## 1. Import
+
 ```{r}
 mdata <- read_rds("data/mdata.rds")
 ```
 
 ## 2. Check for duplicates
+
 ```{r}
 any(duplicated(mdata))
 ```
 
 ## 3. Jitter
+
 ```{r}
 set.seed(1234)
 for (i in 1:nrow(mdata)) {
@@ -61,6 +66,7 @@ tmap_mode('plot')
 ```
 
 ## 4. Train/Test Split
+
 ```{r}
 set.seed(1234)
 resale_split <- initial_split(mdata, 
@@ -80,6 +86,7 @@ write_rds(test_data, "data/model/test_data.rds")
 # 3. Correlation Matrix
 
 The correlation matrix above shows that all the correlation values are below 0.8. Hence, there is no sign of multicolinearity.
+
 ```{r}
 mdata_nogeo <- mdata %>%
   st_drop_geometry()
@@ -93,6 +100,7 @@ corrplot::corrplot(cor(mdata_nogeo[, 2:17]),
 ```
 
 # 4. Building a non-spatial multiple linear regression
+
 ```{r}
 #| echo: FALSE
 #| eval: FALSE
@@ -121,11 +129,14 @@ write_rds(price_mlr, "data/model/price_mlr.rds" )
 # 5. GWR Predictive Model
 
 ## 1. Convert sf train dataframe to sp dataframe
+
 ```{r}
 train_data_sp <- as_Spatial(train_data)
 train_data_sp
 ```
+
 ## 2. Computing adaptive bandwidth
+
 ```{r}
 bw_adaptive <- bw.gwr(resale_price ~ floor_area_sqm +
                   storey_order + remaining_lease_mths +
@@ -148,6 +159,7 @@ write_rds(bw_adaptive, "data/model/bw_adaptive.rds")
 ```
 
 ## 3. Building adpative bandwith GWR model
+
 ```{r}
 #| echo: FALSE
 #| eval: FALSE
@@ -184,6 +196,7 @@ gwr_adaptive <- read_rds("data/model/gwr_adaptive.rds")
 ```
 
 ## 4. Convert sf test dataframe to sp dataframe
+
 ```{r}
 test_data_sp <- test_data %>%
   as_Spatial()
@@ -191,6 +204,7 @@ test_data_sp
 ```
 
 ## 5. Computing adaptive bandwidth for test set
+
 ```{r}
 gwr_bw_test_adaptive <- bw.gwr(resale_price ~ floor_area_sqm +
                   storey_order + remaining_lease_mths +
@@ -207,6 +221,7 @@ gwr_bw_test_adaptive <- bw.gwr(resale_price ~ floor_area_sqm +
 ```
 
 ## 6. Predicting values from test set
+
 ```{r}
 #| eval: FALSE
 gwr_pred <- gwr.predict(formula = resale_price ~
@@ -228,6 +243,7 @@ gwr_pred <- gwr.predict(formula = resale_price ~
 # 6. Geographical Random Forest Method
 
 ## 1. Extracting coordinates data
+
 ```{r}
 coords <- st_coordinates(mdata)
 coords_train <- st_coordinates(train_data)
@@ -242,12 +258,14 @@ coords_test <- write_rds(coords_test, "data/model/coords_test.rds" )
 ```
 
 ## 2. Drop geometry field
+
 ```{r}
 train_data <- train_data %>% 
   st_drop_geometry()
 ```
 
 ## 3. Building random forest model
+
 ```{r}
 set.seed(1234)
 rf <- ranger(resale_price ~ floor_area_sqm + storey_order + 
@@ -273,6 +291,7 @@ rf <- read_rds("data/model/rf.rds")
 ```
 
 ## 4. Building geographical random forest model
+
 ```{r}
 set.seed(1234)
 gwRF_adaptive <- grf(formula = resale_price ~ floor_area_sqm + storey_order +
@@ -287,7 +306,6 @@ gwRF_adaptive <- grf(formula = resale_price ~ floor_area_sqm + storey_order +
                      coords=coords_train)
 ```
 
-
 ```{r}
 #| echo: FALSE
 #| eval: FALSE
@@ -301,6 +319,7 @@ gwRF_adaptive <- read_rds("data/model/gwRF_adaptive.rds")
 ```
 
 ## 5. Predicting values from test data
+
 ```{r}
 test_data <- cbind(test_data, coords_test) %>%
   st_drop_geometry()
@@ -328,6 +347,7 @@ gwRF_pred <- read_rds("data/model/gwRF_pred.rds")
 ```
 
 ## 6. Convert predicting output into dataframe
+
 ```{r}
 GRF_pred_df <- as.data.frame(gwRF_pred)
 test_data_p <- cbind(test_data, GRF_pred_df)
@@ -340,17 +360,17 @@ write_rds(test_data_p, "data/model/test_data_p.rds")
 ```
 
 ## 7. Evaluating using root mean square error
+
 ```{r}
 rmse(test_data_p$resale_price, 
      test_data_p$gwRF_pred)
 ```
 
 ## 8. Visualising predicted valued
+
 ```{r}
 ggplot(data = test_data_p,
        aes(x = gwRF_pred,
            y = resale_price)) +
   geom_point()
 ```
-
-

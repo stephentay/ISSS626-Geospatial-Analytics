@@ -2,7 +2,7 @@
 title: ""
 ---
 
-::: cover-image
+::::: cover-image
 ::: cover-title
 **Geospatial Data Science & Analytics**
 :::
@@ -10,4 +10,4 @@ title: ""
 ::: cover-author
 by Stephen Tay
 :::
-:::
+:::::
