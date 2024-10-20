@@ -17,8 +17,8 @@ execute:
 
 The `spNetwork` package is a crucial geospatial R tool for conducting NetSPAA, specifically for:
 
-- Network Kernel Density Estimation (NKDE), and
-- Network-based G-function and K-function analysis.
+-   Network Kernel Density Estimation (NKDE), and
+-   Network-based G-function and K-function analysis.
 
 ```{r}
 pacman::p_load(sf, spNetwork, tmap, tidyverse)
@@ -28,11 +28,12 @@ pacman::p_load(sf, spNetwork, tmap, tidyverse)
 
 This study analyses the spatial distribution of childcare centers in the Punggol Planning Area. We will import and work with two geospatial datasets:
 
-- `Punggol_St`: A line feature dataset representing the road network within the Punggol Planning Area.
-- `Punggol_CC`: A point feature dataset representing the locations of childcare centers within the Punggol Planning Area.
+-   `Punggol_St`: A line feature dataset representing the road network within the Punggol Planning Area.
+-   `Punggol_CC`: A point feature dataset representing the locations of childcare centers within the Punggol Planning Area.
 
 ::: panel-tabset
 ## Punggol Road Network
+
 After importing the road network data, it is essential to review the dataframe, verify the coordinate reference system (CRS) is correct, and check for any duplicated geometries.
 
 ```{r}
@@ -53,12 +54,14 @@ any(duplicated(network))
 ```
 
 ## Punggol Childcare Centers
+
 After importing the point data, it is essential to review the dataframe, verify the CRS is correct, and check for any duplicated geometries. Since the point geometries are in 3-dimensional coordinates, they must be transformed to 2-dimensional coordinates using the `st_zm()` method.
 
 ```{r}
 childcare <- st_read(dsn="data/geospatial",
                      layer="Punggol_CC")
 ```
+
 ```{r}
 st_crs(childcare)
 ```
@@ -83,12 +86,14 @@ Before starting the analysis, it is good practice to visualize the geospatial da
 
 ::: panel-tabset
 ## Simple Plot
+
 ```{r}
 plot(st_geometry(network))
 plot(childcare,add=T,col='red',pch = 19)
 ```
 
 ## Interactive Plot
+
 ```{r}
 tmap_mode('view')
 tm_shape(childcare) + 
@@ -102,6 +107,7 @@ tmap_mode('plot')
 # 4. Network Kernel Density Estimation (NKDE) Analysis
 
 ## 4.1 Prepare lixels
+
 Before computing NKDE, the SpatialLines object must be segmented into lixels with a specified minimum distance. The lixel length (lx_length) is set to 700m, and the minimum length (mindist) is set to 350m. After segmentation, if the final lixel is shorter than the minimum distance, it is merged with the previous lixel.
 
 ```{r}
@@ -111,6 +117,7 @@ lixels <- lixelize_lines(network,
 ```
 
 ## 4.2 Compute lines' center point
+
 Next, `lines_center()` from the spNetwork package will be used to generate a SpatialPointsDataFrame with points positioned at the center of each line, based on the line’s length, as shown in the code below.
 
 ```{r}
@@ -118,14 +125,16 @@ samples <- lines_center(lixels)
 ```
 
 ## 4.3 Perform NKDE
+
 We are ready to computer the NKDE. There are 3 methods in computing NKDE:
 
 ::: panel-tabset
 ### 4.3.1 Simple Method
+
 The **simple method**, proposed by Xie and Yan (2008), differs from classical KDE in two key ways:
 
-- Events are snapped to a network.
-- Distances between sampling points and events are measured along the network (i.e., not using Euclidean distances).
+-   Events are snapped to a network.
+-   Distances between sampling points and events are measured along the network (i.e., not using Euclidean distances).
 
 Let’s examine the NKDE plot using the simple method below!
 
@@ -152,9 +161,11 @@ tmap_mode('plot')
 ```
 
 ### 4.3.2 Discontinuous Method
+
 The simple method has a limitation: the event’s mass is multiplied by the number of edges at an intersection, causing the kernel not to integrate to 1. To address this, Okabe and Sugihara (2012) proposed the **discontinuous NKDE**, which was further extended by Sugihara, Satoh, and Okabe (2010) for networks with cycles shorter than the bandwidth.
 
 See the NKDE plot using the discontinuous method below!
+
 ```{r}
 discontinuous_densities <- nkde(lines = network, events = childcare,
                   w = rep(1, nrow(childcare)), samples = samples,
@@ -178,9 +189,11 @@ tmap_mode('plot')
 ```
 
 ### 4.3.3 Continuous Method
+
 Discontinuous NKDE can be counterintuitive, resulting in sharp differences between density values across the network, particularly problematic in networks with many closely spaced intersections. The **continuous method** adjusts NKDE values at intersections to ensure the kernel integrates to one, applying a backward correction to maintain continuity in density values. However, this method is recursive and computationally time-consuming.
 
 See the NKDE plot using the continuous method below!
+
 ```{r}
 continuous_densities <- nkde(lines = network, events = childcare,
                   w = rep(1, nrow(childcare)), samples = samples,
@@ -205,6 +218,7 @@ tmap_mode('plot')
 :::
 
 # 5. Network-constrained G- and K-function analysis
+
 A test for complete spatial randomness (CSR) can be performed using the **network-constrained G- and K-functions**.
 
 The test hypotheses are as follows:
@@ -230,6 +244,7 @@ kfun_childcare <- kfunctions(network,
 
 ::: panel-tabset
 ## 5.1 Network K-function
+
 The blue line represents the empirical network K-function of the childcare centers in Punggol, while the gray area shows the results of 1,000 simulations within the 2.5% - 97.5% confidence interval. Since the blue line falls below the lower boundary of the envelope between the 200-400m distance range, it indicates a regular pattern of childcare center locations along the Punggol road network.
 
 ```{r}
@@ -237,6 +252,7 @@ kfun_childcare$plotk
 ```
 
 ## 5.2 Network G-function
+
 The blue line represents the empirical network G-function of the childcare centers in Punggol. Since the blue line falls below the lower boundary of the envelope in the 100-200m distance range, it suggests a regular pattern of childcare center locations along the Punggol road network.
 
 ```{r}
@@ -247,4 +263,3 @@ kfun_childcare$plotg
 # 6. Summary
 
 Network-constrained spatial point pattern analysis revealed a regular distribution of childcare centers along the Punggol road network.
-
