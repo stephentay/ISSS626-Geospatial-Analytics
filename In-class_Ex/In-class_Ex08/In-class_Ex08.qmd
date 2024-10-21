@@ -125,10 +125,12 @@ get_coords <- function(add_list){
 ```
 
 ```{r}
+#| eval: FALSE
 coords <- get_coords(add_list)
 ```
 
 ```{r}
+#| eval: FALSE
 write_rds(coords, "data/rds/coords.rds")
 ```
 :::
@@ -400,6 +402,7 @@ rmse(test_data_pred$resale_price,
 ```
 
 Visualising the predicted values
+It will be best to plot the over-/under-prediction of your model on test data.
 ```{r}
 ggplot(data = test_data_pred,
        aes(x = gwRF_pred,
