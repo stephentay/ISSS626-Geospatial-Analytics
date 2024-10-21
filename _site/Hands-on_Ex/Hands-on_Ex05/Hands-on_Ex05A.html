@@ -280,10 +280,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#preparing-for-global-measures-of-spatial-autocorrelation" id="toc-preparing-for-global-measures-of-spatial-autocorrelation" class="nav-link" data-scroll-target="#preparing-for-global-measures-of-spatial-autocorrelation">4. Preparing for Global Measures of Spatial Autocorrelation</a></li>
   <li><a href="#gmsa-morans-i" id="toc-gmsa-morans-i" class="nav-link" data-scroll-target="#gmsa-morans-i">5. GMSA: Moran’s I</a></li>
   <li><a href="#gmsa-gearys-c" id="toc-gmsa-gearys-c" class="nav-link" data-scroll-target="#gmsa-gearys-c">6. GMSA: Geary’s C</a></li>
-  <li><a href="#spatial-correlogram" id="toc-spatial-correlogram" class="nav-link" data-scroll-target="#spatial-correlogram">7. Spatial Correlogram</a>
-  <ul class="collapse">
-  <li><a href="#gearys-c-correlogram" id="toc-gearys-c-correlogram" class="nav-link" data-scroll-target="#gearys-c-correlogram">2. Geary’s C correlogram</a></li>
-  </ul></li>
+  <li><a href="#spatial-correlogram" id="toc-spatial-correlogram" class="nav-link" data-scroll-target="#spatial-correlogram">7. Spatial Correlogram</a></li>
   </ul>
 </nav>
     </div>
@@ -701,7 +698,11 @@ alternative hypothesis: greater</code></pre>
 <section id="spatial-correlogram" class="level1">
 <h1>7. Spatial Correlogram</h1>
 <p>A <strong>spatial correlogram</strong> is a tool used to assess and visualize spatial autocorrelation against increasing distances (lags) between spatial observations. It plots a measure of spatial autocorrelation, such as Moran’s I or Geary’s C, against distance, allowing us to see how relationships between spatial observations change as the distance between them increases. Correlograms help identify how far spatial dependence extends and whether it weakens, strengthens, or fluctuates with distance.</p>
-<p>::: panel-tabset ## 1. Moran’s I correlogram The <code>sp.correlogram()</code> function from the <code>spdep</code> package is used to compute a 6-lag spatial correlogram for GDP per capita (GDPPC), with Moran’s I as the measure of global spatial autocorrelation.</p>
+<div class="tabset-margin-container"></div><div class="panel-tabset">
+<ul class="nav nav-tabs" role="tablist"><li class="nav-item" role="presentation"><a class="nav-link active" id="tabset-5-1-tab" data-bs-toggle="tab" data-bs-target="#tabset-5-1" role="tab" aria-controls="tabset-5-1" aria-selected="true">1. Moran’s I correlogram</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-5-2-tab" data-bs-toggle="tab" data-bs-target="#tabset-5-2" role="tab" aria-controls="tabset-5-2" aria-selected="false">2. Geary’s C correlogram</a></li></ul>
+<div class="tab-content">
+<div id="tabset-5-1" class="tab-pane active" role="tabpanel" aria-labelledby="tabset-5-1-tab">
+<p>The <code>sp.correlogram()</code> function from the <code>spdep</code> package is used to compute a 6-lag spatial correlogram for GDP per capita (GDPPC), with Moran’s I as the measure of global spatial autocorrelation.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb38"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a>MI_corr <span class="ot">&lt;-</span> <span class="fu">sp.correlogram</span>(wm_q, </span>
 <span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a>                          hunan<span class="sc">$</span>GDPPC, </span>
@@ -714,7 +715,11 @@ alternative hypothesis: greater</code></pre>
 </div>
 </div>
 <p>Plotting the output alone may not provide a complete interpretation, as not all autocorrelation values are statistically significant. Therefore, it’s important to review the full analysis by printing the results, as shown in the code chunk below.</p>
-<p>The results reveal that: - <strong>Spatial Clustering at Short Distances:</strong> There is evidence of spatial clustering of similar GDP per capita values within shorter distances (lags 1-3). Neighboring areas are likely to have similar economic performance. - <strong>Diminishing Spatial Autocorrelation with Distance:</strong> Beyond lag 3, spatial autocorrelation weakens and eventually becomes insignificant at larger distances. This suggests that the relationship between neighboring areas becomes weaker as the distance between them increases.</p>
+<p>The results reveal that:</p>
+<ul>
+<li><strong>Spatial Clustering at Short Distances:</strong> There is evidence of spatial clustering of similar GDP per capita values within shorter distances (lags 1-3). Neighboring areas are likely to have similar economic performance.</li>
+<li><strong>Diminishing Spatial Autocorrelation with Distance:</strong> Beyond lag 3, spatial autocorrelation weakens and eventually becomes insignificant at larger distances. This suggests that the relationship between neighboring areas becomes weaker as the distance between them increases.</li>
+</ul>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb39"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(MI_corr)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
@@ -731,8 +736,8 @@ method: Moran's I
 Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
 </div>
 </div>
-<section id="gearys-c-correlogram" class="level2">
-<h2 class="anchored" data-anchor-id="gearys-c-correlogram">2. Geary’s C correlogram</h2>
+</div>
+<div id="tabset-5-2" class="tab-pane" role="tabpanel" aria-labelledby="tabset-5-2-tab">
 <p>In the code chunk below, the <code>sp.correlogram()</code> function from the <code>spdep</code> package is used to compute a 6-lag spatial correlogram for GDP per capita (GDPPC), using Geary’s C as the measure of global spatial autocorrelation.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb41"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a>GC_corr <span class="ot">&lt;-</span> <span class="fu">sp.correlogram</span>(wm_q, </span>
@@ -745,7 +750,11 @@ Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
 <p><img src="Hands-on_Ex05A_files/figure-html/unnamed-chunk-22-1.png" class="img-fluid" width="672"></p>
 </div>
 </div>
-<p>The results reveal that: - <strong>Spatial Clustering at Short Distances:</strong> There is evidence of spatial clustering of similar GDP per capita values within shorter distances (lags 1-2). Neighboring areas are likely to have similar economic performance. - <strong>Diminishing Spatial Autocorrelation with Distance:</strong> Beyond lag 2, spatial autocorrelation weakens and eventually becomes insignificant at larger distances. This suggests that the relationship between neighboring areas becomes weaker as the distance between them increases.</p>
+<p>The results reveal that:</p>
+<ul>
+<li><strong>Spatial Clustering at Short Distances:</strong> There is evidence of spatial clustering of similar GDP per capita values within shorter distances (lags 1-2). Neighboring areas are likely to have similar economic performance.</li>
+<li><strong>Diminishing Spatial Autocorrelation with Distance:</strong> Beyond lag 2, spatial autocorrelation weakens and eventually becomes insignificant at larger distances. This suggests that the relationship between neighboring areas becomes weaker as the distance between them increases.</li>
+</ul>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb42"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(GC_corr)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
@@ -762,9 +771,11 @@ method: Geary's C
 Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
 </div>
 </div>
+</div>
+</div>
+</div>
 
 
-</section>
 </section>
 
 </main> <!-- /main -->

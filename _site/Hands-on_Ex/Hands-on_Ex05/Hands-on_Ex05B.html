@@ -786,7 +786,13 @@ Zixing        -7.6849e-01 -8.8210e-02  9.4057e-01 -7.0144e-01         0.4830</co
 </div>
 <div id="tabset-4-5" class="tab-pane" role="tabpanel" aria-labelledby="tabset-4-5-tab">
 <p>For effective interpretation, it’s best to display both GDPCC values map and the corresponding LISA cluster map side by side.</p>
-<p>Here’s the observations of the LISA map: - <strong>Red Areas (High-High Clusters):</strong> These are areas with high GDPPC values surrounded by other areas with similarly high GDPPC. In the northeastern part of the region, you can see the high-GDPPC cluster that aligns with the darker orange areas in the GDPPC map. - <strong>Blue Areas (Low-Low Clusters):</strong> These represent areas with low GDPPC surrounded by similarly low GDPPC values. In this case, the cluster to the west is consistent with the lighter-colored areas (lower GDPPC) on the GDPPC map. - <strong>Light Blue Areas (Low-High Outliers):</strong> These areas have low GDPPC but are surrounded by areas with higher GDPPC values. This signifies outlier behavior where local GDPPC is lower than expected compared to its neighbors. - <strong>White Areas (Insignificant):</strong> These areas are not statistically significant in terms of spatial autocorrelation, meaning there is no strong clustering pattern.</p>
+<p>Here’s the observations of the LISA map:</p>
+<ul>
+<li><strong>Red Areas (High-High Clusters):</strong> These are areas with high GDPPC values surrounded by other areas with similarly high GDPPC. In the northeastern part of the region, you can see the high-GDPPC cluster that aligns with the darker orange areas in the GDPPC map.</li>
+<li><strong>Blue Areas (Low-Low Clusters):</strong> These represent areas with low GDPPC surrounded by similarly low GDPPC values. In this case, the cluster to the west is consistent with the lighter-colored areas (lower GDPPC) on the GDPPC map.</li>
+<li><strong>Light Blue Areas (Low-High Outliers):</strong> These areas have low GDPPC but are surrounded by areas with higher GDPPC values. This signifies outlier behavior where local GDPPC is lower than expected compared to its neighbors.</li>
+<li><strong>White Areas (Insignificant):</strong> These areas are not statistically significant in terms of spatial autocorrelation, meaning there is no strong clustering pattern.</li>
+</ul>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb31"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a>gdppc <span class="ot">&lt;-</span> <span class="fu">qtm</span>(hunan, <span class="st">"GDPPC"</span>)</span>
 <span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a></span>
@@ -811,7 +817,12 @@ Zixing        -7.6849e-01 -8.8210e-02  9.4057e-01 -7.0144e-01         0.4830</co
 </div>
 </div>
 <div id="tabset-4-6" class="tab-pane" role="tabpanel" aria-labelledby="tabset-4-6-tab">
-<p><strong>Key takeaways:</strong> - <strong>High-High Cluster (Northeast):</strong> The high GDPPC area in the northeast is a clear high-high cluster, which means this area has high economic performance relative to surrounding areas, and this pattern is statistically significant. - <strong>Low-Low Cluster (West):</strong> The low GDPPC areas in the west are part of a low-low cluster, indicating a region where GDPPC values are consistently low in relation to their neighbors. - <strong>Outliers:</strong> The low-high outlier (light blue) suggests an area that underperforms in GDPPC relative to surrounding areas, which might warrant further investigation for potential disparities.</p>
+<p><strong>Key takeaways:</strong></p>
+<ul>
+<li><strong>High-High Cluster (Northeast):</strong> The high GDPPC area in the northeast is a clear high-high cluster, which means this area has high economic performance relative to surrounding areas, and this pattern is statistically significant.</li>
+<li><strong>Low-Low Cluster (West):</strong> The low GDPPC areas in the west are part of a low-low cluster, indicating a region where GDPPC values are consistently low in relation to their neighbors.</li>
+<li><strong>Outliers:</strong> The low-high outlier (light blue) suggests an area that underperforms in GDPPC relative to surrounding areas, which might warrant further investigation for potential disparities.</li>
+</ul>
 </div>
 </div>
 </div>

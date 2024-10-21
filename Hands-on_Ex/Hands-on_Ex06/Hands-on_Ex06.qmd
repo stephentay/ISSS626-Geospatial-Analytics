@@ -12,18 +12,19 @@ execute:
 ---
 
 # 1. Overview
+
 In geobusiness and spatial policy, a key practice is the segmentation of markets or planning areas into homogeneous regions using multivariate data. This segmentation allows for more targeted planning, resource allocation, and policy-making. This exercise focuses on **delineating homogeneous regions using geographically referenced multivariate data**, employing two primary analytical techniques:
 
-- Hierarchical cluster analysis
-- Spatially constrained cluster analysis
+-   Hierarchical cluster analysis
+-   Spatially constrained cluster analysis
 
 In this hands-on exercise, we will apply these techniques to segment Shan State, Myanmar, into homogeneous regions based on various Information and Communication Technology (ICT) measures. These measures include the availability of radio, television, landline phones, mobile phones, computers, and internet access at home. By understanding the spatial distribution of these ICT indicators, we can gain insights into the region’s digital landscape and inform policy decisions.
 
 A few new R packages required for geographical segmentation and analysis include:
 
-- `rgdal` for spatial data handling 
-- `coorplot`, `ggpubr`, `heatmaply`, `psych`, `GGally`: These packages are used for multivariate data visualisation
-- `cluster`, `ClustGeo`, `factoextra`, `NbClust`: These packages facilitate cluster analysis.
+-   `rgdal` for spatial data handling
+-   `coorplot`, `ggpubr`, `heatmaply`, `psych`, `GGally`: These packages are used for multivariate data visualisation
+-   `cluster`, `ClustGeo`, `factoextra`, `NbClust`: These packages facilitate cluster analysis.
 
 ```{r}
 pacman::p_load(spdep, tmap, sf, ClustGeo, 
@@ -32,13 +33,15 @@ pacman::p_load(spdep, tmap, sf, ClustGeo,
 ```
 
 # 2. Importing & Transforming Data
+
 Two datasets will be used in this hands-on exercise:
 
-- **Myanmar Township Boundary Data**: A geospatial dataset in ESRI shapefile format that outlines the township boundaries of Myanmar
-- **2014 Myanmar Population and Housing Census**: A CSV file containing township-level information from the 2014 census.
+-   **Myanmar Township Boundary Data**: A geospatial dataset in ESRI shapefile format that outlines the township boundaries of Myanmar
+-   **2014 Myanmar Population and Housing Census**: A CSV file containing township-level information from the 2014 census.
 
 ::: panel-tabset
 ## Myanmar Township Boundary
+
 ```{r}
 shan_sf <- st_read(dsn = "data/geospatial", 
                    layer = "myanmar_township_boundaries") %>%
@@ -55,7 +58,9 @@ glimpse(shan_sf)
 ```
 
 ## Myanmar Population and Housing Census
+
 There are a total of 11 columns and 55 observations.
+
 ```{r}
 ict <- read_csv("data/aspatial/Shan-ICT.csv")
 ```
@@ -65,14 +70,15 @@ summary(ict)
 ```
 
 ## Creating New Variables
+
 The values are measured as the number of households. Using these numbers directly can introduce bias, as townships with more households are likely to have higher counts for owning radios, TVs, etc. To address this, we calculate the penetration rate for six ICT variables:
 
-- RADIO_PR: Radio Penetration Rate
-- TV_PR: TV Penetration Rate
-- LLPHONE_PR: Landline Phone Penetration Rate
-- MPHONE_PR: Mobile Phone Penetration Rate
-- COMPUTER_PR: Computer Penetration Rate
-- INTERNET_PR: Home Internet Penetration Rate
+-   RADIO_PR: Radio Penetration Rate
+-   TV_PR: TV Penetration Rate
+-   LLPHONE_PR: Landline Phone Penetration Rate
+-   MPHONE_PR: Mobile Phone Penetration Rate
+-   COMPUTER_PR: Computer Penetration Rate
+-   INTERNET_PR: Home Internet Penetration Rate
 
 ```{r}
 ict_derived <- ict %>%
@@ -93,15 +99,17 @@ summary(ict_derived)
 ```
 :::
 
-
 # 3. Exploratory Data Analysis
 
 ## 3.1 EDA using statistical graphics
+
 We will be plotting the distribution of the variables.
 
 ::: panel-tabset
 ### Households with Radio
+
 The top plot is a histogram of households with radios, illustrating the overall shape and distribution of the data (e.g., normal distribution, left or right skew). The bottom plot is a boxplot for the same data, highlighting potential outliers.
+
 ```{r}
 ggplot(data=ict_derived, 
        aes(x=`RADIO`)) +
@@ -109,7 +117,6 @@ ggplot(data=ict_derived,
                  color="black", 
                  fill="light blue")
 ```
-
 
 ```{r}
 ggplot(data=ict_derived, 
@@ -119,7 +126,9 @@ ggplot(data=ict_derived,
 ```
 
 ### Radio Penetration Rate
+
 Now, we will plot the radio penetration rate. The distribution of the penetration rate is less skewed and has fewer outliers compared to the number of households with radios. This is expected, as larger townships tend to have more households, leading to more extreme values.
+
 ```{r}
 ggplot(data=ict_derived, 
        aes(x=`RADIO_PR`)) +
@@ -127,7 +136,6 @@ ggplot(data=ict_derived,
                  color="black", 
                  fill="light blue")
 ```
-
 
 ```{r}
 ggplot(data=ict_derived, 
@@ -137,7 +145,9 @@ ggplot(data=ict_derived,
 ```
 
 ### Histograms of all ICT penetration rates
+
 The chart below displays histograms for each of the six ICT penetration rates.
+
 ```{r}
 #| code-fold: true
 radio <- ggplot(data=ict_derived, 
@@ -182,7 +192,9 @@ ggarrange(radio, tv, llphone, mphone, computer, internet,
 ```
 
 ### Boxplots for all ICT penetration rates
+
 The chart below displays boxplots for each of the six ICT penetration rates.
+
 ```{r}
 #| code-fold: true
 radio_boxplot <- ggplot(data=ict_derived, 
@@ -220,6 +232,7 @@ ggarrange(radio_boxplot, tv_boxplot, llphone_boxplot,
 
 ::: panel-tabset
 ### Joining geospatial data with aspatial data
+
 Before plotting the choropleth map, we need to join the ICT variables from the aspatial dataset to the Myanmar Township geospatial dataset. The `ict_derived` dataset is left-joined with the `shan_sf` dataset using the `TS_PCODE` key. We use `qtm()` to have a quick look at the distribution of Radio penetration rate.
 
 ```{r}
@@ -230,7 +243,9 @@ qtm(shan_sf, "RADIO_PR")
 ```
 
 ### Radio
+
 The plot below shows the choropleth map of the total number of households in each town (left) and the number of households with radios (right). Towns with larger number of households are also showing higher number of radio ownership.
+
 ```{r}
 TT_HOUSEHOLDS.map <- tm_shape(shan_sf) + 
   tm_fill(col = "TT_HOUSEHOLDS",
@@ -251,6 +266,7 @@ tmap_arrange(TT_HOUSEHOLDS.map, RADIO.map,
 ```
 
 The plots below display a choropleth map of the total number of households in each township (left) and the radio penetration rate (right). We observe that higher penetration rates are found in areas with fewer households.
+
 ```{r}
 tm_shape(shan_sf) +
     tm_polygons(c("TT_HOUSEHOLDS", "RADIO_PR"),
@@ -259,8 +275,11 @@ tm_shape(shan_sf) +
   tm_legend(legend.position = c("right", "bottom"))+
   tm_layout(outer.margins=0, asp=0)
 ```
+
 ### TV
+
 Below is the choropleth maps for Total Households, Households with TVs, and TV Penetration Rate.
+
 ```{r}
 #| code-fold: true
 TV.map <- tm_shape(shan_sf) + 
@@ -282,7 +301,9 @@ tmap_arrange(TT_HOUSEHOLDS.map, TV.map, TV_PR.map,
 ```
 
 ### Landline Phone
+
 Below is the choropleth maps for Total Households, Households with Landline Phones, and Landline Phone Penetration Rate.
+
 ```{r}
 #| code-fold: true
 LLPHONE.map <- tm_shape(shan_sf) + 
@@ -304,7 +325,9 @@ tmap_arrange(TT_HOUSEHOLDS.map, LLPHONE.map, LLPHONE_PR.map,
 ```
 
 ### Mobile Phone
+
 Below is the choropleth maps for Total Households, Households with Mobile Phones, and Mobile Phone Penetration Rate.
+
 ```{r}
 #| code-fold: true
 MPHONE.map <- tm_shape(shan_sf) + 
@@ -326,7 +349,9 @@ tmap_arrange(TT_HOUSEHOLDS.map, MPHONE.map, MPHONE_PR.map,
 ```
 
 ### Computer
+
 Below is the choropleth maps for Total Households, Households with Computers, and Computer Penetration Rate.
+
 ```{r}
 #| code-fold: true
 COMPUTER.map <- tm_shape(shan_sf) + 
@@ -348,7 +373,9 @@ tmap_arrange(TT_HOUSEHOLDS.map, COMPUTER.map, COMPUTER_PR.map,
 ```
 
 ### Home Internet
+
 Below is the choropleth maps for Total Households, Households with Home Internet, and Internet Penetration Rate.
+
 ```{r}
 #| code-fold: true
 INTERNET.map <- tm_shape(shan_sf) + 
@@ -371,9 +398,11 @@ tmap_arrange(TT_HOUSEHOLDS.map, INTERNET.map, INTERNET_PR.map,
 :::
 
 ## 3.3 Correlation Analysis
+
 Before performing cluster analysis, it’s crucial to ensure that the clustering variables are not highly correlated. We use the `corrplot.mixed()` function from the `corrplot` package to visualise and analyse the correlations among the input variables.
 
 The correlation plot above reveals that `COMPUTER_PR` and `INTERNET_PR` are highly correlated, suggesting that only one of these variables should be included in the cluster analysis.
+
 ```{r}
 cluster_vars.cor = cor(ict_derived[,12:17])
 corrplot.mixed(cluster_vars.cor,
@@ -385,10 +414,13 @@ corrplot.mixed(cluster_vars.cor,
 ```
 
 # 4. Hierarchical Cluster Analysis
-These are the steps to perform hierarchical clustering. 
+
+These are the steps to perform hierarchical clustering.
 
 ## 4.1. Extract clustering variables
+
 Since `COMPUTER_PR` and `INTERNET_PR` are highly correlated, we will just pick `COMPUTER_PR` over `INTERNET_PR`, along with the other 4 ICT variables.
+
 ```{r}
 cluster_vars <- shan_sf %>%
   st_set_geometry(NULL) %>%
@@ -396,38 +428,45 @@ cluster_vars <- shan_sf %>%
 head(cluster_vars,10)
 ```
 
-We then update the row names to the town names. 
+We then update the row names to the town names.
+
 ```{r}
 row.names(cluster_vars) <- cluster_vars$"TS.x"
 head(cluster_vars,10)
 ```
 
 We can now delete the TS.x field.
+
 ```{r}
 shan_ict <- select(cluster_vars, c(2:6))
 head(shan_ict, 10)
 ```
 
 ## 4.2. Data Standardisation
+
 We will compare min-max and z-score standardization to determine the most appropriate method for standardizing the input variables before cluster analysis. This step is essential to prevent bias toward variables with larger value ranges.
 
 We use `normalize()` to do min-max standardization.
+
 ```{r}
 shan_ict.std <- normalize(shan_ict)
 summary(shan_ict.std)
 ```
 
 We use `scale()` to do z-score standardization. Z-score standardisation method should only be used if we would assume all variables come from some normal distribution
+
 ```{r}
 shan_ict.z <- scale(shan_ict)
 describe(shan_ict.z)
 ```
 
 ## 4.3. Visualise standardised clustering variables
+
 It is good practice to visualise the distributions of the standardised variables. From the visualisation, it is clear that landline phone, mobile phone and computer penetration rates have non-normal distributions.
 
 ::: panel-tabset
 ### Radio
+
 ```{r}
 #| code-fold: true
 r <- ggplot(data=ict_derived, 
@@ -457,7 +496,6 @@ ggarrange(r, s, z,
           ncol = 3,
           nrow = 1)
 ```
-
 
 ```{r}
 #| code-fold: true
@@ -487,6 +525,7 @@ ggarrange(r, s, z,
 ```
 
 ### TV
+
 ```{r}
 #| code-fold: true
 r <- ggplot(data=ict_derived, 
@@ -532,7 +571,9 @@ ggarrange(r, s, z, rd, sd, zd,
           ncol = 3,
           nrow = 2)
 ```
+
 ### Landline Phone
+
 ```{r}
 #| code-fold: true
 r <- ggplot(data=ict_derived, 
@@ -578,7 +619,9 @@ ggarrange(r, s, z, rd, sd, zd,
           ncol = 3,
           nrow = 2)
 ```
+
 ### Mobile Phone
+
 ```{r}
 #| code-fold: true
 r <- ggplot(data=ict_derived, 
@@ -624,7 +667,9 @@ ggarrange(r, s, z, rd, sd, zd,
           ncol = 3,
           nrow = 2)
 ```
+
 ### Computer
+
 ```{r}
 #| code-fold: true
 r <- ggplot(data=ict_derived, 
@@ -672,8 +717,8 @@ ggarrange(r, s, z, rd, sd, zd,
 ```
 :::
 
-
 ## 4.4 Compute proximity matrix
+
 We use the `dist()` function to compute the euclidean distance matrix of the min-max standardised input variables.
 
 ```{r}
@@ -682,6 +727,7 @@ proxmat
 ```
 
 ## 4.5 Compute hierarchical clustering
+
 We use the `hclust()` function to conduct the agglomerative hierarchical clustering. The `ward.D` method is used in this instance. The dendrogram is plotted below.
 
 ```{r}
@@ -690,6 +736,7 @@ plot(hclust_ward, cex = 0.6)
 ```
 
 ## 4.6 Select optimal clustering algorithm
+
 A key challenge in hierarchical clustering is identifying strong clustering structures. The `agnes()` function from the `cluster` package computes the agglomerative coefficient, with values closer to 1 indicating a stronger clustering structure. Using `agnes()` and `map_dbl()` together, we could compute the coefficients for all hierarchical clustering algorithms. Ward's method has the highest agglomerative coefficient.
 
 ```{r}
@@ -704,13 +751,14 @@ map_dbl(m, ac)
 ```
 
 ## 4.7 Determine Optimal Clusters
+
 There are three methods to determine the optimal number of clusters:
 
-- Elbow method
-- Average silhouette method
-- Gap statistic method
+-   Elbow method
+-   Average silhouette method
+-   Gap statistic method
 
-We will use the gap statistic method, which compares the total intra-cluster variation for different values of k to what would be expected under a random uniform distribution. The optimal number of clusters is the value of k that maximizes the gap statistic, indicating that the clustering structure is significantly different from random noise. 
+We will use the gap statistic method, which compares the total intra-cluster variation for different values of k to what would be expected under a random uniform distribution. The optimal number of clusters is the value of k that maximizes the gap statistic, indicating that the clustering structure is significantly different from random noise.
 
 The `clusGap()` function of the `cluster` package and the `hcut()` function of the `factoextra` package are used.
 
@@ -732,6 +780,7 @@ fviz_gap_stat(gap_stat)
 ```
 
 ## 4.8 Interpret the dendrogram
+
 In the dendrogram, each leaf represents an observation. Moving up the tree, similar observations are merged into branches, which are then combined at higher levels.
 
 The height of each fusion, shown on the vertical axis, indicates the (dis)similarity between observations. A greater fusion height means the observations are less similar. It’s important to note that the similarity of two observations is determined solely by the height at which their branches first merge, not by their proximity along the horizontal axis.
@@ -746,17 +795,22 @@ rect.hclust(hclust_ward,
 ```
 
 ## 4.9 Visually-driven hierarchical clustering analysis
+
 We could also perform a visually-driven hierarchical clustering by using the `heatmaply` package.
 
 ::: panel-tabset
 ### 1. Transform the dataframe into a matrix
+
 First, we need to transform the dataframe into a matrix.
+
 ```{r}
 shan_ict_mat <- data.matrix(shan_ict.std)
 ```
 
 ### 2. Plot interactive cluster heatmap
+
 An interactive cluster heatmap is plotted using the `heatmaply()` function.
+
 ```{r}
 heatmaply(normalize(shan_ict_mat),
           Colv=NA,
@@ -776,15 +830,17 @@ heatmaply(normalize(shan_ict_mat),
 :::
 
 ## 4.10 Visualise the clusters in choropleth map
+
 To map the 6 clusters, we need to:
 
-- Use `cuttree()` to extract the assignment to the six clusters.
-- Convert the groups into a matrix 
-- Append the groupings to `shan_sf` dataframe
-- Rename the group field.
-- Use `qtm()` to plot the six clusters.
+-   Use `cuttree()` to extract the assignment to the six clusters.
+-   Convert the groups into a matrix
+-   Append the groupings to `shan_sf` dataframe
+-   Rename the group field.
+-   Use `qtm()` to plot the six clusters.
 
 The choropleth map shows that the clusters are highly fragmented. This is a major limitation of using non-spatial clustering algorithms, such as hierarchical cluster analysis.
+
 ```{r}
 groups <- as.factor(cutree(hclust_ward, k = 6))
 
@@ -794,11 +850,12 @@ shan_sf_cluster <- cbind(shan_sf, as.matrix(groups)) %>%
 qtm(shan_sf_cluster, "CLUSTER")
 ```
 
-
 # 5. Spatially Constrained Clustering: SKATER method
+
 In this section, we will derive spatially constrained cluster by using `skater()` method of `spdep` package. These are the steps to perform it.
 
 ## 5.1 Convert into SpatialPolygonsDataFrame
+
 First, we need to convert `shan_sf` into SpatialPolygonsDataFrame, as the `skater()` function only supports sp objects.
 
 ```{r}
@@ -806,7 +863,9 @@ shan_sp <- as_Spatial(shan_sf)
 ```
 
 ## 5.2 Compute Neighbour List
+
 The `poly2nd()` of spdep package will be used to compute the neighbours list.
+
 ```{r}
 shan.nb <- poly2nb(shan_sp)
 summary(shan.nb)
@@ -814,9 +873,10 @@ summary(shan.nb)
 
 We can plot the neighbor list by performing these steps:
 
-- Compute the centroids of each town
-- Plot the Myanmar township boundaries
-- Plot the network of neighbours
+-   Compute the centroids of each town
+-   Plot the Myanmar township boundaries
+-   Plot the network of neighbours
+
 ```{r}
 coords <- st_coordinates(
   st_centroid(st_geometry(shan_sf)))
@@ -829,8 +889,8 @@ plot(shan.nb,
      add=TRUE)
 ```
 
-
 ## 5.3 Compute edge cost
+
 The `nbcosts()` function from the `spdep` package calculates the cost of each edge, representing the distance between nodes, using a data frame of observation vectors for each node.
 
 This provides the pairwise dissimilarity between each observation’s values across the five variables and those of its neighboring observations (from the neighbor list). Essentially, this acts as a generalized weight for the spatial weights matrix.
@@ -848,26 +908,29 @@ shan.w <- nb2listw(shan.nb,
 summary(shan.w)
 ```
 
-
-
 ## 5.4 Compute minimum spanning tree
-The minimum spanning tree is computed using the `mstree()` of `spdep` package. 
+
+The minimum spanning tree is computed using the `mstree()` of `spdep` package.
+
 ```{r}
 shan.mst <- mstree(shan.w)
 class(shan.mst)
 ```
 
 There are 54 dimensions instead of 55 because a minimum spanning tree has n-1 edges to connect all the nodes.
+
 ```{r}
 dim(shan.mst)
 ```
 
 The content of shan.mst is shown below.
+
 ```{r}
 head(shan.mst)
 ```
 
 The plot below displays the minimum spanning tree, illustrating how the initial neighbor list is simplified to a single edge connecting each node while still passing through all nodes.
+
 ```{r}
 plot(st_geometry(shan_sf), 
                  border=gray(.5))
@@ -880,11 +943,12 @@ plot.mst(shan.mst,
 ```
 
 ## 5.5 Compute spatially constrained clusters using SKATER method
+
 The spatially constrained clusters are computed using the `skater()` function from the `spdep` package. This function requires three mandatory arguments:
 
-- The first two columns of the MST matrix (excluding the cost).
-- The data matrix (used to update costs as units are grouped).
-- The number of cuts, which is set to one less than the desired number of clusters.
+-   The first two columns of the MST matrix (excluding the cost).
+-   The data matrix (used to update costs as units are grouped).
+-   The number of cuts, which is set to one less than the desired number of clusters.
 
 Note: The specified value represents the number of cuts in the graph, not the number of clusters. Therefore, it should be one less than the total number of clusters you want.
 
@@ -897,17 +961,20 @@ str(clust6)
 ```
 
 The cluster assignments are as follows:
+
 ```{r}
 ccs6 <- clust6$groups
 ccs6
 ```
 
 This table shows the number of towns in each cluster:
+
 ```{r}
 table(ccs6)
 ```
 
 The 6 clusters are as follows:
+
 ```{r}
 plot(st_geometry(shan_sf), 
      border=gray(.5))
@@ -920,7 +987,9 @@ plot(clust6,
 ```
 
 ## 5.6 Visualise the clusters in choropleth map
+
 The newly derived clusters are plotted below:
+
 ```{r}
 groups_mat <- as.matrix(clust6$groups)
 shan_sf_spatialcluster <- shan_sf_cluster %>% 
@@ -930,6 +999,7 @@ qtm(shan_sf_spatialcluster, "SP_CLUSTER")
 ```
 
 The plot below compares the clusters generated by hierarchical clustering with those obtained using the skater approach.
+
 ```{r}
 hclust.map <- qtm(shan_sf_cluster,
                   "CLUSTER") + 
@@ -944,9 +1014,11 @@ tmap_arrange(hclust.map, shclust.map,
 ```
 
 # 6. Spatially Constrained Clustering: ClustGeo Method
+
 In this section, we will derive spatially constrained cluster by using `ClustGeo` package. These are the steps to perform it.
 
 ## 6.1 Ward-like hierarchical clustering: ClustGeo
+
 ClustGeo package provides the `hclustgeo()` function to perform a typical Ward-like hierarchical clustering. To perform non-spatially constrained hierarchical clustering, we only need to provide a dissimilarity matrix as derived in section 4.4.
 
 ```{r}
@@ -958,6 +1030,7 @@ rect.hclust(nongeo_cluster,
 ```
 
 The choropleth map allows us to visualise the clusters.
+
 ```{r}
 groups <- as.factor(cutree(nongeo_cluster, k=6))
 shan_sf_ngeo_cluster <- cbind(shan_sf, as.matrix(groups)) %>%
@@ -966,29 +1039,33 @@ qtm(shan_sf_ngeo_cluster, "CLUSTER")
 ```
 
 ## 6.2 Spatially Constrained Hierarchical Clustering
+
 A spatial distance matrix is derived using the `st_distance()` function from the `sf` package. Then, `as.dist()` is used to convert the data frame into a matrix.
+
 ```{r}
 dist <- st_distance(shan_sf, shan_sf)
 distmat <- as.dist(dist)
 ```
 
-The choicealpha() function is then used to determine an appropriate value for the mixing parameter, alpha. 
+The choicealpha() function is then used to determine an appropriate value for the mixing parameter, alpha.
+
 ```{r}
 cr <- choicealpha(proxmat, distmat, range.alpha = seq(0, 1, 0.1), K=6, graph = TRUE)
 ```
 
 Based on the chart, we will use alpha = 0.4 in the spatially constrained hierarchical clustering.
+
 ```{r}
 clustG <- hclustgeo(proxmat, distmat, alpha = 0.4)
 ```
 
 To visualize the clusters, we follow steps similar to those in Section 4.10:
 
-- Use `cuttree()` to extract the six cluster assignments.
-- Convert the groups into a matrix.
-- Append the groupings to the shan_sf dataframe.
-- Rename the grouping field.
-- Use `qtm()` to plot the six clusters.
+-   Use `cuttree()` to extract the six cluster assignments.
+-   Convert the groups into a matrix.
+-   Append the groupings to the shan_sf dataframe.
+-   Rename the grouping field.
+-   Use `qtm()` to plot the six clusters.
 
 ```{r}
 groups <- as.factor(cutree(clustG, k=6))
@@ -1000,11 +1077,14 @@ qtm(shan_sf_Gcluster, "CLUSTER")
 ```
 
 # 7. Visual Interpretation of Clusters
+
 There are two ways to visualise the clustering variables of each cluster:
 
 ::: panel-tabset
 ## Visualise individual clustering variable
+
 The boxplot below reveal the distribution of the radio penetration rate by cluster. Cluster 2 displays the highest median radio penetration rate, followed by clusters 4, 1, 3, 5 and 6.
+
 ```{r}
 ggplot(data = shan_sf_ngeo_cluster,
        aes(x = CLUSTER, y = RADIO_PR)) +
@@ -1012,7 +1092,8 @@ ggplot(data = shan_sf_ngeo_cluster,
 ```
 
 ## Multivariate Visualisation
-A parallel coordinate plot is an effective way to reveal the distribution of multiple clustering variables by cluster. 
+
+A parallel coordinate plot is an effective way to reveal the distribution of multiple clustering variables by cluster.
 
 The parallel coordinate plot shows that households in Cluster 4 townships tend to have the highest ownership of TVs and mobile phones. In contrast, households in Cluster 5 have the lowest ownership across all five ICT measures.
 
@@ -1028,6 +1109,7 @@ ggparcoord(data = shan_sf_ngeo_cluster,
 ```
 
 Summary statistics (such as mean, median, and standard deviation) provide a valuable complement to visual interpretation.
+
 ```{r}
 shan_sf_ngeo_cluster %>% 
   st_set_geometry(NULL) %>%
@@ -1039,4 +1121,3 @@ shan_sf_ngeo_cluster %>%
             mean_COMPUTER_PR = mean(COMPUTER_PR))
 ```
 :::
-
