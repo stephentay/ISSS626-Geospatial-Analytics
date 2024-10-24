@@ -12,25 +12,31 @@ execute:
   freeze: true 
 ---
 
-::: {style="font-size: 1.50em"}
 # 1. Overview
+In this exercise, we will focus on two main objectives:
 
-In this exercise, we will be utilizing several important R packages that facilitate data extraction and manipulation:
+- **Retrieving Latitude and Longitude Coordinates for Singapore Addresses:** In the first part, we will walk through the steps to obtain geographical coordinates (latitude and longitude) for addresses in Singapore. This will involve using an API from Singapore Land Authority (SLA) to convert address data into spatial coordinates.
+- **Geospatial Predictive Modeling:** In the second part, we will learn alternative R packages in building geospatial predictive models.
+
+# 2. Retrieving Lat/Long Coordinates for SG Addresses
+
+::: panel-tabset
+## 2.1 R packages
+In this exercise, we will be utilizing several important R packages:
 
 -	rvest: A package designed for web scraping, allowing us to easily extract data from HTML and XML web pages by providing functions to navigate and parse the web content.
 -	httr: A package that simplifies working with HTTP requests and responses in R. It enables us to send HTTP requests to web servers, handle authentication, and manage cookies, making it useful for interacting with web APIs and accessing web resources that require more complex HTTP operations.
 -	jsonlite: A package that provides a robust set of tools for working with JSON data in R. It allows us to parse JSON files and convert them into R data frames or lists, and also to serialize R objects into JSON format, facilitating the exchange of data between R and web applications or APIs that use JSON.
 
-
 ```{r}
 pacman::p_load(tidyverse, sf, httr, jsonlite, rvest)
 ```
 
+## 2.2 Data Transformation
 ```{r}
 resale <- read_csv("data/rawdata/resale.csv") %>%
   filter(month >= "2023-01" & month <= "2024-09")
 ```
-
 ```{r}
 resale_tidy <- resale %>%
   mutate(address = paste(block,street_name)) %>%
@@ -40,19 +46,22 @@ resale_tidy <- resale %>%
     str_sub(remaining_lease, 9, 11)))
 ```
 
+For the purpose of this exercise, we will use a subset of the dataset for demonstration.
 ```{r}
 resale_selected <- resale_tidy %>%
   filter(month == "2024-09")
 ```
 
-
-unique to remove duplicates
+## 2.3 Removing duplicates
+We use unique() to remove duplicates, and sort() to allow easy searching of addresses.
 sort is for easy searching of the data.
 ```{r}
 add_list <- sort(unique(resale_selected$address))
 ```
 
-Use SLA API (https://www.onemap.gov.sg/apidocs/) to perform reverse geocoding.
+## 2.4 Function for Reverse Geocoding
+We will use SLA's API (https://www.onemap.gov.sg/apidocs/) to perform reverse geocoding.
+The code chunk below defines a function for reverse geocoding.
 
 ```{r}
 get_coords <- function(add_list){
@@ -124,18 +133,23 @@ get_coords <- function(add_list){
 }
 ```
 
+## 2.5 Reverse Geocoding
 ```{r}
 #| eval: FALSE
 coords <- get_coords(add_list)
 ```
 
 ```{r}
+#| echo: FALSE
 #| eval: FALSE
 write_rds(coords, "data/rds/coords.rds")
 ```
 :::
 
+# 3. Geospatial Predictive Modeling
+We now move on to another topic on geospatial predictive modeling.
 
+## 3.1 R packages & Data Preparation
 ```{r}
 pacman::p_load(sf, spdep, GWmodel, SpatialML, tmap, rsample, Metrics, tidyverse, kableExtra)
 ```
@@ -144,9 +158,7 @@ pacman::p_load(sf, spdep, GWmodel, SpatialML, tmap, rsample, Metrics, tidyverse,
 mdata <- read_rds("data/mdata.rds")
 ```
 
-Proportion split 6.5/10.
-No stratification is used in this dataset.
-
+We split the dataset into training and testing sets, with the training set comprising 65% of the data. Please note that stratification was not applied during this train/test split. However, in geospatial predictive modeling, it is essential to incorporate stratification to ensure that samples from various locations are represented fairly and to avoid bias in the model.
 ```{r}
 #| eval: FALSE
 set.seed(1234)
@@ -169,15 +181,17 @@ train_data <- read_rds("data/model/train_data.rds")
 test_data <- read_rds("data/model/test_data.rds")
 ```
 
-Multicollinearity check
+## 3.2 Multicollinearity Check 1
 We need to drop the geometry column before doing the correlation matrix.
 ```{r}
+#| fig-width: 12
+#| fig-height: 10
 mdata_nogeo <- mdata %>%
   st_drop_geometry()
 ggstatsplot::ggcorrmat(mdata_nogeo[, 2:17])
 ```
 
-Building a non-spatial multiple linear regression
+## 3.3 Building a Non-spatial MLR
 ```{r}
 price_mlr <- lm(resale_price ~ floor_area_sqm + 
                   storey_order + remaining_lease_mths +
@@ -190,21 +204,22 @@ price_mlr <- lm(resale_price ~ floor_area_sqm +
 olsrr::ols_regress(price_mlr)
 ```
 
-
+## 3.4 VIF: Multicollinearity Check 2
 ```{r}
 vif <- performance::check_collinearity(price_mlr)
 kable(vif, caption = "Variance Inflation Factor (VIF) Results") %>%
   kable_styling(font_size = 18)
 ```
 
-
 ```{r}
 plot(vif) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 
-Predictive Modelling with MLR
-Computing adaptive bandwidth
+## 3.5 Predictive Modelling with MLR
+
+::: panel-tabset
+### 1. Compute adaptive bandwidth (train set)
 ```{r}
 #| eval: FALSE
 bw_adaptive <- bw.gwr(resale_price ~ floor_area_sqm +
@@ -232,6 +247,7 @@ write_rds(bw_adaptive, "data/model/bw_adaptive.rds")
 bw_adaptive <- read_rds("data/model/bw_adaptive.rds")
 ```
 
+### 2. Build adpative bandwith GWR model
 ```{r}
 #| eval: FALSE
 gwr_adaptive <- gwr.basic(formula = resale_price ~
@@ -260,8 +276,7 @@ write_rds(gwr_adaptive, "data/model/gwr_adaptive.rds")
 gwr_adaptive <- read_rds("data/model/gwr_adaptive.rds")
 ```
 
-Predicting with test data
-Test data bw
+### 3. Compute adaptive bandwidth (test set)
 ```{r}
 #| eval: FALSE
 gwr_bw_test_adaptive <- bw.gwr(resale_price ~ floor_area_sqm +
@@ -289,7 +304,7 @@ write_rds(gwr_bw_test_adaptive, "data/model/gwr_bw_test_adaptive.rds")
 gwr_bw_test_adaptive <- read_rds("data/model/gwr_bw_test_adaptive.rds")
 ```
 
-
+### 4. Predict values from test set
 ```{r}
 #| eval: FALSE
 gwr_pred <- gwr.predict(formula = resale_price ~
@@ -307,23 +322,26 @@ gwr_pred <- gwr.predict(formula = resale_price ~
                         adaptive=TRUE, 
                         longlat = FALSE)
 ```
+:::
 
+# 4. Geographical Random Forest Method
+
+## 4.1 Extracting coordinates data
 We need to extract out the coordinates from the training and test data, in order to work with SpatialML
-
 ```{r}
 coords <- st_coordinates(mdata)
 coords_train <- st_coordinates(train_data)
 coords_test <- st_coordinates(test_data)
 ```
 
-
-Drop Geometry Field
+## 4.2 Drop geometry field
 ```{r}
 train_data_nogeom <- train_data %>% 
   st_drop_geometry()
 ```
 
-Calibrating RF model (non-spatial ML)
+## 4.3 Building non-spatial random forest model
+Calibrating a non-spatial RF model
 ```{r}
 #| eval: FALSE
 set.seed(1234)
@@ -348,7 +366,7 @@ write_rds(rf, "data/model/rf.rds")
 rf <- read_rds("data/model/rf.rds")
 ```
 
-Geographical RF model
+## 4.4 Building geographical random forest model
 ```{r}
 set.seed(1234)
 gwRF_adaptive <- grf(formula = resale_price ~ floor_area_sqm + storey_order +
@@ -363,13 +381,14 @@ gwRF_adaptive <- grf(formula = resale_price ~ floor_area_sqm + storey_order +
                      coords=coords_train)
 ```
 
-Preparing the test data
+## 4.5 Predicting values from test data
+First, we need to prepare the test data.
 ```{r}
 test_data_nogeom <- cbind(test_data, coords_test) %>%
   st_drop_geometry()
 ```
 
-Predicting with the test data
+Now, we can predict with the test data.
 ```{r}
 #| eval: FALSE
 gwRF_pred <- predict.grf(gwRF_adaptive, 
@@ -391,18 +410,20 @@ write_rds(gwRF_pred, "data/model/gwRF_pred.rds")
 gwRF_pred <- read_rds("data/model/gwRF_pred.rds")
 ```
 
+## 4.6 Convert predicting output into dataframe
 ```{r}
 GRF_pred_df <- as.data.frame(gwRF_pred)
 test_data_pred <- cbind(test_data, GRF_pred_df)
 ```
 
+## 4.7 Evaluating using root mean square error
 ```{r}
 rmse(test_data_pred$resale_price, 
      test_data_pred$gwRF_pred)
 ```
 
-Visualising the predicted values
-It will be best to plot the over-/under-prediction of your model on test data.
+## 4.8 Visualising predicted valued
+The chart displays the predicted values from the Geographically Weighted Random Forest (GWRF) model against the actual values. It is beneficial to visualize the over- and under-predictions of your model on the test data for better insight into its performance.
 ```{r}
 ggplot(data = test_data_pred,
        aes(x = gwRF_pred,
@@ -410,36 +431,4 @@ ggplot(data = test_data_pred,
   geom_point()
 ```
 
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
 
