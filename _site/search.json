@@ -1230,5 +1230,47 @@
     "title": "Hands-on Ex 9B",
     "section": "",
     "text": "The hands-on exercise on Modelling Geographical Accessibility is in Hands-on Ex 10"
+  },
+  {
+    "objectID": "In-class_Ex/In-class_Ex09/In-class_Ex09.html",
+    "href": "In-class_Ex/In-class_Ex09/In-class_Ex09.html",
+    "title": "In-class Ex 9",
+    "section": "",
+    "text": "In this exercise, we will cover a few tips whe\n\nRetrieving Latitude and Longitude Coordinates for Singapore Addresses: In the first part, we will walk through the steps to obtain geographical coordinates (latitude and longitude) for addresses in Singapore. This will involve using an API from Singapore Land Authority (SLA) to convert address data into spatial coordinates.\nGeospatial Predictive Modeling: In the second part, we will learn alternative R packages in building geospatial predictive models.\n\n\npacman::p_load(tidyverse, sf, httr, jsonlite, rvest, tmap)"
+  },
+  {
+    "objectID": "In-class_Ex/In-class_Ex09/In-class_Ex09.html#import-geospatial-data",
+    "href": "In-class_Ex/In-class_Ex09/In-class_Ex09.html#import-geospatial-data",
+    "title": "In-class Ex 9",
+    "section": "4.1 Import geospatial data",
+    "text": "4.1 Import geospatial data\n\nmpsz &lt;- st_read(dsn = \"data/geospatial\", layer = \"MP14_SUBZONE_NO_SEA_PL\") %&gt;%\n  st_transform(crs = 3414)\n\nReading layer `MP14_SUBZONE_NO_SEA_PL' from data source \n  `/Users/stephentay/stephentay/ISSS626-Geospatial-Analytics/In-class_Ex/In-class_Ex09/data/geospatial' \n  using driver `ESRI Shapefile'\nSimple feature collection with 323 features and 15 fields\nGeometry type: MULTIPOLYGON\nDimension:     XY\nBounding box:  xmin: 2667.538 ymin: 15748.72 xmax: 56396.44 ymax: 50256.33\nProjected CRS: SVY21\n\nhexagons &lt;- st_read(dsn = \"data/geospatial\", layer = \"hexagons\") %&gt;%\n  st_transform(crs = 3414)\n\nReading layer `hexagons' from data source \n  `/Users/stephentay/stephentay/ISSS626-Geospatial-Analytics/In-class_Ex/In-class_Ex09/data/geospatial' \n  using driver `ESRI Shapefile'\nSimple feature collection with 3125 features and 6 fields\nGeometry type: POLYGON\nDimension:     XY\nBounding box:  xmin: 2667.538 ymin: 21506.33 xmax: 50010.26 ymax: 50256.33\nProjected CRS: SVY21 / Singapore TM\n\neldercare &lt;- st_read(dsn = \"data/geospatial\", layer = \"ELDERCARE\") %&gt;%\n  st_transform(crs = 3414)\n\nReading layer `ELDERCARE' from data source \n  `/Users/stephentay/stephentay/ISSS626-Geospatial-Analytics/In-class_Ex/In-class_Ex09/data/geospatial' \n  using driver `ESRI Shapefile'\nSimple feature collection with 120 features and 19 fields\nGeometry type: POINT\nDimension:     XY\nBounding box:  xmin: 14481.92 ymin: 28218.43 xmax: 41665.14 ymax: 46804.9\nProjected CRS: SVY21 / Singapore TM"
+  },
+  {
+    "objectID": "In-class_Ex/In-class_Ex09/In-class_Ex09.html#import-aspatial-data",
+    "href": "In-class_Ex/In-class_Ex09/In-class_Ex09.html#import-aspatial-data",
+    "title": "In-class Ex 9",
+    "section": "4.2 Import aspatial data",
+    "text": "4.2 Import aspatial data\n\nODMatrix &lt;- read_csv(\"data/aspatial/OD_Matrix.csv\", skip = 0)\nglimpse(ODMatrix)\n\nRows: 375,000\nColumns: 6\n$ origin_id      &lt;dbl&gt; 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1…\n$ destination_id &lt;dbl&gt; 1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18,…\n$ entry_cost     &lt;dbl&gt; 667.9336, 667.9336, 667.9336, 667.9336, 667.9336, 667.9…\n$ network_cost   &lt;dbl&gt; 19846.87, 45026.76, 17644.17, 36009.56, 31068.09, 31194…\n$ exit_cost      &lt;dbl&gt; 47.64874, 31.87162, 173.47882, 92.19676, 64.62840, 117.…\n$ total_cost     &lt;dbl&gt; 20562.45, 45726.57, 18485.58, 36769.69, 31800.65, 31979…"
+  },
+  {
+    "objectID": "In-class_Ex/In-class_Ex09/In-class_Ex09.html#data-cleaning-and-updating-attributes",
+    "href": "In-class_Ex/In-class_Ex09/In-class_Ex09.html#data-cleaning-and-updating-attributes",
+    "title": "In-class Ex 9",
+    "section": "4.3 Data cleaning and updating attributes",
+    "text": "4.3 Data cleaning and updating attributes\n\nSupplyDemandOD Matrix\n\n\nWe select the relevant fields from the eldercare dataset, and we assign a constant supply value of 100 for simplicity.\n\neldercare &lt;- eldercare %&gt;%\n  select(fid, ADDRESSPOS) %&gt;%\n  mutate(capacity = 100)\n\n\n\nWe select the relevant fields from the hexagons dataset, and we assign a constant demand value of 100 for simplicity.In practice, these values should represent the actual demand of each hexagon. You may need to crawl from internet to count the number of blocks and the number of levels to estimate the demand.\n\nhexagons &lt;- hexagons %&gt;%\n  select(fid) %&gt;%\n  mutate(demand = 100)\n\n\n\n\ndistmat &lt;- ODMatrix %&gt;%\n  select(origin_id, destination_id, total_cost) %&gt;%\n  spread(destination_id, total_cost)%&gt;%\n  select(c(-c('origin_id')))\ndistmat_km &lt;- as.matrix(distmat/1000)"
+  },
+  {
+    "objectID": "In-class_Ex/In-class_Ex09/data/geospatial/hexagons.html",
+    "href": "In-class_Ex/In-class_Ex09/data/geospatial/hexagons.html",
+    "title": "",
+    "section": "",
+    "text": "&lt;!DOCTYPE qgis PUBLIC ‘http://mrcc.com/qgis.dtd’ ‘SYSTEM’&gt;     dataset\n\n\n                 0 0     false"
+  },
+  {
+    "objectID": "In-class_Ex/In-class_Ex09/data/geospatial/ELDERCARE.html",
+    "href": "In-class_Ex/In-class_Ex09/data/geospatial/ELDERCARE.html",
+    "title": "",
+    "section": "",
+    "text": "&lt;!DOCTYPE qgis PUBLIC ‘http://mrcc.com/qgis.dtd’ ‘SYSTEM’&gt;  ELDERCARE  ENG dataset\n\nELDERCARE\n\n                 0 0     false"
   }
 ]
