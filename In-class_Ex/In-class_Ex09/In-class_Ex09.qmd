@@ -13,20 +13,21 @@ execute:
 ---
 
 # 1. Overview
-In this exercise, we will cover a few tips whe
+In this exercise, we will explore essential techniques in geospatial analytics, including:
 
--   **Retrieving Latitude and Longitude Coordinates for Singapore Addresses:** In the first part, we will walk through the steps to obtain geographical coordinates (latitude and longitude) for addresses in Singapore. This will involve using an API from Singapore Land Authority (SLA) to convert address data into spatial coordinates.
--   **Geospatial Predictive Modeling:** In the second part, we will learn alternative R packages in building geospatial predictive models.
+- Counting the number of points within specified distances from other point features
+- Applying jittering to resolve overlapping points
+- Modeling geographical accessibility
 
 ```{r}
-pacman::p_load(tidyverse, sf, httr, jsonlite, rvest, tmap)
+pacman::p_load(tidyverse, sf, tmap)
 ```
 
-# 2. Count Number of Points within a Distance
-How do we count the number of point features (e.g. CHAS clinics) within 1 km of another point features (e.g. eldercare facilities)?
+# 2. Counting Points within a Specified Distance from Target Locations
+How can we determine the number of specific point features (e.g., CHAS clinics) located within a given distance, such as 1 km, from the target locations (e.g., eldercare facilities)? The steps are as follows:
 
 ::: panel-tabset
-## 1. Import Eldercare dataset
+## 1. Import eldercare dataset
 ```{r}
 eldercare <- st_read(dsn = "data/rawdata",
                      layer = "ELDERCARE") %>%
@@ -40,11 +41,14 @@ CHAS <- st_read(dsn = "data/rawdata/CHASClinics.kml") %>%
 ```
 
 ## 3. Buffering around eldercare centers
+The `st_buffer()` function from the sf package is used to create a 1km buffer around each eldercare features.
 ```{r}
 buffer_1km <- st_buffer(eldercare, dist = 1000)
 glimpse(buffer_1km)
 ```
-## 4. Visualisation
+
+## 4. Visualising buffers around eldercare centers
+The plot shows the buffers around the eldercare centers and the CHAS clinics.
 ```{r}
 tmap_mode("view")
 tm_shape(buffer_1km) +
@@ -54,7 +58,8 @@ tm_shape(buffer_1km) +
 tmap_mode("plot")
 ```
 
-## 5. Count number of points
+## 5. Count number of points within each buffer
+The combination of st_intersects() and lengths() functions count the number of CHAS clinics within 1km of each eldercare center.
 ```{r}
 buffer_1km$pts_count <- lengths(st_intersects(buffer_1km, CHAS))
 glimpse(buffer_1km)
@@ -62,9 +67,21 @@ glimpse(buffer_1km)
 :::
 
 # 3. Jittering Overlapping Points
-if projected coordinate system is in meters, then amount of displacement is 2m. 
-Don't use smaller than 1 or decimal as the algorithm will be rounded up again. The amount of jitter to be applied must be a value that allows overlapping points to be sufficiently displaced.
-You must also ensure that the jitter points still remain within the boundaries of the buildings.
+Overlapping points can cause issues in certain geospatial functions, as some may fail to run when multiple points share identical coordinates. The code chunk below is used to check if there are overlapping point features.
+```{r}
+#| eval: false
+overlapping_points <- read_rds("data/mdata.rds") %>%
+  mutate(overlap = lengths(st_equals(., .)) > 1)
+```
+
+To address overlapping points, we use the `st_jitter()` function to apply a small, random displacement to overlapping points, controlling the displacement magnitude through the `amount` argument. The amount of displacement will follow the metric used in the projected coordinate system (i.e. if the CRS is in meters, the amount of displacement will be in meters as well).
+
+::: callout-important
+- Avoid setting the displacement amount smaller than 1, as geospatial algorithms may round coordinates to the nearest integer. For the same reason, use whole numbers rather than decimals.
+- Ensure the displacement value is sufficient to separate overlapping points effectively.
+- Verify that jittered points remain within the boundaries of their respective features (e.g., buildings) to maintain spatial accuracy.
+:::
+
 ```{r}
 #| eval: false
 mdata <- read_rds("data/mdata.rds") %>%
@@ -98,7 +115,7 @@ glimpse(ODMatrix)
 
 ::: panel-tabset
 ### Supply
-We select the relevant fields from the eldercare dataset, and we assign a constant supply value of 100 for simplicity.
+We select the relevant fields from the eldercare dataset and assign a constant supply value of 100 to each location for simplified analysis. In practice, these supply values should reflect actual or closely estimated supply levels for each location to ensure accuracy.
 ```{r}
 eldercare <- eldercare %>%
   select(fid, ADDRESSPOS) %>%
@@ -106,7 +123,7 @@ eldercare <- eldercare %>%
 ```
 
 ### Demand
-We select the relevant fields from the hexagons dataset, and we assign a constant demand value of 100 for simplicity.In practice, these values should represent the actual demand of each hexagon. You may need to crawl from internet to count the number of blocks and the number of levels to estimate the demand.
+We select the relevant fields from the hexagons dataset and assign a constant demand value of 100 to each hexagon for simplified analysis. In practice, these demand values should closely approximate the actual demand within each hexagon. For instance, estimating demand may involve web scraping to count the number of buildings and the number of floors of each building within each hexagon.
 ```{r}
 hexagons <- hexagons %>%
   select(fid) %>%
@@ -114,6 +131,7 @@ hexagons <- hexagons %>%
 ```
 
 ### OD Matrix
+To convert the dataset from long to wide format, we use the `spread()` function. Additionally, we convert the distance metric from meters to kilometers and transform the dataset into a matrix.
 ```{r}
 distmat <- ODMatrix %>%
   select(origin_id, destination_id, total_cost) %>%
@@ -123,18 +141,19 @@ distmat_km <- as.matrix(distmat/1000)
 ```
 :::
 
-# 5. Modelling Accessibility using Hansen's Method
+## 4.4. Modelling accessibility using Hansen's method
 
-::: panel-tabset
-## 1. Compute Hansen's accessibility
+### 4.4.1 Compute Hansen's accessibility
 Hansen’s accessibility is calculated using the `ac()` function from the `SpatialAcc` package. The result is then converted to a dataframe, with the default column renamed to `accHansen` and converted into a tibble dataframe.
 
 `acc_Hansen` dataset is then joined to the `hexagons` sf dataframe using `bind_cols()`. `hexagon_Hansen` is now a sf dataframe.
+
+Note: Setting d0 to 50 establishes the distance threshold for demand cutoff, where 50 represents 50 km, approximately the width of the Singapore map.
 ```{r}
 acc_Hansen <- data.frame(ac(hexagons$demand,
                             eldercare$capacity,
                             distmat_km, 
-                            #d0 = 50, # this is not necessary, but we can set it to 50 which is the breadth of SG map.
+                            #d0 = 50,
                             power = 2, 
                             family = "Hansen"))
 
@@ -144,10 +163,11 @@ acc_Hansen <- as_tibble(acc_Hansen)
 hexagon_Hansen <- bind_cols(hexagons, acc_Hansen)
 ```
 
-## 2. Visualisation
+### 4.4.2 Visualising acessibility
+To maintain a consistent map extent, we extract the boundaries of the hexagons sf dataframe using the `st_bbox()` function. By setting a fixed map extent during plotting, the map display remains unchanged — even if there are areas without points, tmap will still show the entire map.
 ```{r}
 #| code-fold: true
-mapex <- st_bbox(hexagons) # we want to ensure that the map extent don't change (i.e. if a map has no points, we continue to show the entire map)
+mapex <- st_bbox(hexagons)
 
 tmap_mode("plot")
 tm_shape(hexagon_Hansen,
@@ -172,12 +192,19 @@ tm_shape(eldercare) +
   tm_scale_bar(width = 0.15) +
   tm_grid(lwd = 0.1, alpha = 0.5)
 ```
-## 3. Statistical graphics
+### 4.4.3 Statistical visualisation
+We compare the distribution of Hansen's accessibility values across URA Planning Regions by first adding the planning region field to the `hexagon_Hansen` sf dataframe. Once this field is added, we visualise the distribution of Hansen accessibility across the Planning Regions.
 ```{r}
 hexagon_Hansen <- st_join(hexagon_Hansen, mpsz, 
                           join = st_intersects)
 ```
 
+We can use the `ggbetweenstats()` function from the `ggstatsplot` package for statistical visualisation. This function provides a distribution plot of accessibility values across regions, while also performing ANOVA and pairwise comparisons to assess differences between groups.
+
+These are the four statistical testing options available in the `ggbetweenstats()` function:
+
+::: panel-tabset
+#### Parametric t-test
 ```{r}
 ggbetweenstats(
   data = hexagon_Hansen, 
@@ -185,7 +212,7 @@ ggbetweenstats(
   y = accHansen,
   type = "p")
 ```
-
+#### Non-parametric Wilcoxon-Mann-Whitney test
 ```{r}
 ggbetweenstats(
   data = hexagon_Hansen, 
@@ -194,6 +221,7 @@ ggbetweenstats(
   type = "np")
 ```
 
+#### Yuen’s test for trimmed means
 ```{r}
 ggbetweenstats(
   data = hexagon_Hansen, 
@@ -202,6 +230,7 @@ ggbetweenstats(
   type = "robust")
 ```
 
+#### Bayesian independent samples t-test
 ```{r}
 ggbetweenstats(
   data = hexagon_Hansen, 
@@ -210,407 +239,3 @@ ggbetweenstats(
   type = "bayes")
 ```
 :::
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
