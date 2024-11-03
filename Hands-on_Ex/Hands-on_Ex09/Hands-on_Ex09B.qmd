@@ -31,7 +31,7 @@ pacman::p_load(tmap, sf, sp, performance, reshape2, ggpubr, tidyverse)
 ```
 
 # 2. Importing & Preparing Data
-This exercise builds on [Hands-on Ex 9A](https://geospatialanalytics-stephentay.netlify.app/Hands-on_Ex/Hands-on_Ex9/Hands-on_Ex9A.html) on **Processing & Visualising Flow Data**, and utilises the following datasets:
+This exercise builds on [Hands-on Ex 9A](https://geospatialanalytics-stephentay.netlify.app/hands-on_ex/hands-on_ex09/hands-on_ex09a) on **Processing & Visualising Flow Data**, and utilises the following datasets:
 
 - **OD Matrix of Bus Commuter Flow**: Data on weekday morning peak-hour bus commuter flows, derived from LTA’s dataset.
 - **MPSZ-2019**: Sub-zone boundary data from the URA Master Plan 2019.

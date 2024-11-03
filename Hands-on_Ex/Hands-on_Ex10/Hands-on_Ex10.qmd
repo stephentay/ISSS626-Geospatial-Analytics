@@ -11,8 +11,9 @@ execute:
   freeze: true 
 ---
 
-The hands-on exercise on **Processing & Visualising Flow Data** is in [Hands-on Ex 9A](https://geospatialanalytics-stephentay.netlify.app/Hands-on_Ex/Hands-on_Ex9/Hands-on_Ex9A.html).
-The hands-on exercise on **Calibrating Spatial Interaction Models** is in [Hands-on Ex 9B](https://geospatialanalytics-stephentay.netlify.app/Hands-on_Ex/Hands-on_Ex9/Hands-on_Ex9B.html).
+The hands-on exercise on **Processing & Visualising Flow Data** is in [Hands-on Ex 9A](https://geospatialanalytics-stephentay.netlify.app/hands-on_ex/hands-on_ex09/hands-on_ex09a).
+
+The hands-on exercise on **Calibrating Spatial Interaction Models** is in [Hands-on Ex 9B](https://geospatialanalytics-stephentay.netlify.app/hands-on_ex/hands-on_ex09/hands-on_ex09b).
 
 
 # 1. Overview
