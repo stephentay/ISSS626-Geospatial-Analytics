@@ -2,7 +2,7 @@
 title: "Hands-on Ex 9B"
 subtitle: "Calibrating Spatial Interaction Models"
 author: "Stephen Tay"
-date: "26 Oct 2024"
+date: "2 Nov 2024"
 date-modified:  "last-modified"
 execute: 
   eval: true
@@ -12,3 +12,478 @@ execute:
 ---
 
 The hands-on exercise on **Modelling Geographical Accessibility** is in [Hands-on Ex 10](https://geospatialanalytics-stephentay.netlify.app/Hands-on_Ex/Hands-on_Ex10/Hands-on_Ex10.html)
+
+# 1. Overview
+**Spatial Interaction Models (SIMs)** are mathematical models for estimating flows between locations. These models help to analyse movement patterns by assessing the factors influencing interactions between places. There are four main types of SIMs:
+
+- **Unconstrained:** Estimates flows without restrictions, assuming all spatial units interact freely.
+- **Origin-constrained (or production-constrained):** Constrains the total flow from each origin, focusing on the production capacity of each origin location.
+- **Destination-constrained (or attraction-constrained):** Constrains the total flow into each destination, considering the attraction capacity of each destination.
+- **Doubly-constrained:** Balances flows from both origins and destinations, ensuring both production and attraction capacities are met.
+
+Ordinary Least Squares (OLS), log-normal, Poisson, and negative binomial (NB) regression methods are commonly used to calibrate OD flow models by treating flow data as different types of dependent variables. In this exercise, we will be using Poisson regression to calibrate a SIM to determine factors affecting the bus commuter flows on weekday morning peak hours in Singapore.
+
+Calibration is the process of adjusting model parameters to ensure the model’s estimates closely match observed data. Goodness-of-fit statistics are typically used to confirm that the optimal solution has been achieved.
+
+The following R packages are used in this exercise:
+```{r}
+pacman::p_load(tmap, sf, sp, performance, reshape2, ggpubr, tidyverse)
+```
+
+# 2. Importing & Preparing Data
+This exercise builds on [Hands-on Ex 9A](https://geospatialanalytics-stephentay.netlify.app/Hands-on_Ex/Hands-on_Ex9/Hands-on_Ex9A.html) on **Processing & Visualising Flow Data**, and utilises the following datasets:
+
+- **OD Matrix of Bus Commuter Flow**: Data on weekday morning peak-hour bus commuter flows, derived from LTA’s dataset.
+- **MPSZ-2019**: Sub-zone boundary data from the URA Master Plan 2019.
+- **Sub-Zone Population Data**: Population counts by age group (e.g., 7-12, 13-24, 25-64) at the sub-zone level.
+
+## 2.1 Prepare distance matrix between planning subzones
+The following steps are taken to compute the distance matrix between planning subzones.
+
+::: panel-tabset
+### 1. Import MPSZ
+```{r}
+mpsz <- read_rds("data/rds/mpsz.rds")
+mpsz
+```
+
+### 2. Convert to sp dataframe
+Before computing the distance matrix (i.e., distances between pairs of locations), we convert the sf dataframe to an sp dataframe. Although the distance matrix can be computed directly from an sf dataframe, the sp method is generally more time-efficient.
+```{r}
+mpsz_sp <- as(mpsz, "Spatial")
+mpsz_sp
+```
+### 3. Compute distance matrix
+We use the spDists() function from the sp package to compute the Euclidean distance between the centroids of the planning subzones.
+```{r}
+dist <- spDists(mpsz_sp, 
+                longlat = FALSE)
+head(dist, n=c(10, 10))
+```
+
+### 4. Label row and column headers of distance matrix
+Since the row and column headers of the distance matrix are unlabeled, we perform the following steps to add labels for the planning subzone codes:
+
+-	Create a list of planning subzone codes sorted to match the order of the distance matrix.
+-	Attach SUBZONE_C labels to the rows and columns of the distance matrix for alignment.
+```{r}
+sz_names <- mpsz$SUBZONE_C
+
+colnames(dist) <- paste0(sz_names)
+rownames(dist) <- paste0(sz_names)
+
+head(dist, n=c(5, 5))
+```
+
+### 5. Convert distance matrix to long table format
+We use the `melt()` function to convert the distance matrix into a long-table format. Note that intra-zonal distances are 0.
+```{r}
+distPair <- melt(dist) %>%
+  rename(dist = value)
+head(distPair, 10)
+```
+
+### 6. Update intra-zonal distance
+We assign a small non-zero constant to replace intra-zonal distances of 0.
+
+First, we find out the minimum inter-zonal distance using `summary()`.
+```{r}
+distPair %>%
+  filter(dist > 0) %>%
+  summary()
+```
+We assign a constant of 50m to replace intra-zonal distances.
+```{r}
+distPair$dist <- ifelse(distPair$dist == 0,
+                        50, distPair$dist)
+
+distPair %>%
+  summary()
+```
+
+We rename the variables for clarity.
+```{r}
+distPair <- distPair %>%
+  rename(orig = Var1,
+         dest = Var2)
+```
+
+```{r}
+#| eval: false
+#| echo: false
+write_rds(distPair, "data/rds/distPair.rds") 
+```
+
+```{r}
+#| eval: false
+#| echo: false
+distPair <- read_rds("data/rds/distPair.rds")
+```
+:::
+
+## 2.2 Prepare flow data
+
+::: panel-tabset
+### 1. Import OD matrix of bus commuter flow
+The OD matrix of bus commuter flow was computed in Ex 9A. We will import the OD matrix for this exercise.
+```{r}
+od_data_fii <- read_rds("data/rds/od_data_fii.rds")
+```
+
+### 2. Compute total bus commuter trips
+We compute the total commuter trips between and within planning subzones as follows:
+```{r}
+flow_data <- od_data_fii %>%
+  group_by(ORIGIN_SZ, DESTIN_SZ) %>% 
+  summarize(TRIPS = sum(MORNING_PEAK)) 
+head(flow_data, 10)
+```
+
+### 3. Add new fields for intra-zonal flows
+Two new fields specific to intra-zonal flows are added to the dataset.
+```{r}
+flow_data$FlowNoIntra <- ifelse(
+  flow_data$ORIGIN_SZ == flow_data$DESTIN_SZ, 
+  0, flow_data$TRIPS)
+flow_data$offset <- ifelse(
+  flow_data$ORIGIN_SZ == flow_data$DESTIN_SZ, 
+  0.000001, 1)
+glimpse(flow_data)
+```
+
+### 4. Combine flow data with distance
+Before joining the flow data with the distance dataset, we need to convert the origin and destination subzones to factor data types.
+```{r}
+flow_data$ORIGIN_SZ <- as.factor(flow_data$ORIGIN_SZ)
+flow_data$DESTIN_SZ <- as.factor(flow_data$DESTIN_SZ)
+
+flow_data1 <- flow_data %>%
+  left_join(distPair,
+            by = c("ORIGIN_SZ" = "orig", "DESTIN_SZ" = "dest"))
+glimpse(flow_data1)
+```
+:::
+
+## 2.3 Prepare origin & destination attributes
+
+::: panel-tabset
+### 1. Import sub-zone population data
+```{r}
+pop <- read_csv("data/aspatial/pop.csv")
+glimpse(pop)
+```
+### 2. Append subzone code
+We left join pop dataset with mpsz dataset to retrieve the subzone codes.
+```{r}
+pop <- pop %>%
+  left_join(mpsz,
+            by = c("PA" = "PLN_AREA_N",
+                   "SZ" = "SUBZONE_N")) %>%
+  select(1:6) %>%
+  rename(SZ_NAME = SZ,
+         SZ = SUBZONE_C)
+glimpse(pop)
+```
+
+### 3. Prepare origin attribute
+We add origin attributes to the flow data.
+```{r}
+flow_data1 <- flow_data1 %>%
+  left_join(pop,
+            by = c(ORIGIN_SZ = "SZ")) %>%
+  rename(ORIGIN_AGE7_12 = AGE7_12,
+         ORIGIN_AGE13_24 = AGE13_24,
+         ORIGIN_AGE25_64 = AGE25_64) %>%
+  select(-c(PA, SZ_NAME))
+```
+
+### 4. Prepare destination attribute
+We add destination attributes to the flow data.
+```{r}
+SIM_data <- flow_data1 %>%
+  left_join(pop,
+            by = c(DESTIN_SZ = "SZ")) %>%
+  rename(DESTIN_AGE7_12 = AGE7_12,
+         DESTIN_AGE13_24 = AGE13_24,
+         DESTIN_AGE25_64 = AGE25_64) %>%
+  select(-c(PA, SZ_NAME))
+glimpse(SIM_data)
+```
+
+```{r}
+#| eval: false
+#| echo: false 
+write_rds(SIM_data, "data/rds/SIM_data.rds")
+```
+
+```{r}
+#| eval: false
+#| echo: false 
+SIM_data <- read_rds("data/rds/SIM_data.rds")
+```
+:::
+
+# 3. Calibrating Spatial Interaction Models
+In this section, we will calibrate Spatial Interaction Models using Poisson Regression.
+
+## 3.1 Visualise dependent variable
+
+::: panel-tabset
+### Histogram of DV
+The distribution of the dependent variable (total number of trips between zones) is shown below. The distribution is highly skewed and has a non-normal distribution.
+```{r}
+ggplot(data = SIM_data,
+       aes(x = TRIPS)) +
+  geom_histogram()
+```
+
+### Scatterplot between DV and distance
+The scatterplot below shows the relationship between the total number of trips and the key independent variable of the Spatial Interaction Model, distance. The relationship does not resemble any linear relationship.
+```{r}
+ggplot(data = SIM_data,
+       aes(x = dist,
+           y = TRIPS)) +
+  geom_point() +
+  geom_smooth(method = lm)
+```
+
+### Log-transformed scatterplot
+A log-transformation of both variables reveals a relationship that closely approximates linearity.
+```{r}
+ggplot(data = SIM_data,
+       aes(x = log(dist),
+           y = log(TRIPS))) +
+  geom_point() +
+  geom_smooth(method = lm)
+```
+:::
+
+## 3.2 Check for zero values
+Since Poisson regression uses the natural logarithm, and log(0) is undefined, we must ensure there are no zero values in the explanatory variables. The summary indicates that some variables contain zero values.
+```{r}
+summary(SIM_data)
+```
+
+## 3.3 Replace zero values with 0.99
+We replace all zero values in the affected explanatory variables with 0.99.
+```{r}
+SIM_data$DESTIN_AGE7_12 <- ifelse(
+  SIM_data$DESTIN_AGE7_12 == 0,
+  0.99, SIM_data$DESTIN_AGE7_12)
+SIM_data$DESTIN_AGE13_24 <- ifelse(
+  SIM_data$DESTIN_AGE13_24 == 0,
+  0.99, SIM_data$DESTIN_AGE13_24)
+SIM_data$DESTIN_AGE25_64 <- ifelse(
+  SIM_data$DESTIN_AGE25_64 == 0,
+  0.99, SIM_data$DESTIN_AGE25_64)
+SIM_data$ORIGIN_AGE7_12 <- ifelse(
+  SIM_data$ORIGIN_AGE7_12 == 0,
+  0.99, SIM_data$ORIGIN_AGE7_12)
+SIM_data$ORIGIN_AGE13_24 <- ifelse(
+  SIM_data$ORIGIN_AGE13_24 == 0,
+  0.99, SIM_data$ORIGIN_AGE13_24)
+SIM_data$ORIGIN_AGE25_64 <- ifelse(
+  SIM_data$ORIGIN_AGE25_64 == 0,
+  0.99, SIM_data$ORIGIN_AGE25_64)
+```
+
+```{r}
+summary(SIM_data)
+```
+
+## 3.4 Unconstrained SIM
+We will calibrate an unconstrained SIM with the following explanatory variables:
+
+- Origin population by different age cohort
+- Destination population by different age cohort
+- Distance between origin and destination in kilometers
+
+::: panel-tabset
+### Calibrate model
+```{r}
+uncSIM <- glm(formula = TRIPS ~ 
+                log(ORIGIN_AGE7_12) + 
+                log(DESTIN_AGE7_12) +
+                log(ORIGIN_AGE13_24) + 
+                log(DESTIN_AGE13_24) +
+                log(ORIGIN_AGE25_64) + 
+                log(DESTIN_AGE25_64) +
+                log(dist),
+              family = poisson(link = "log"),
+              data = SIM_data,
+              na.action = na.exclude)
+uncSIM
+```
+### R-squared value of model
+To assess how much of the variation in trip counts is explained by the model, we define a function to calculate the R-squared value as follows:
+```{r}
+CalcRSquared <- function(observed,estimated){
+  r <- cor(observed,estimated)
+  R2 <- r^2
+  R2
+}
+```
+
+The R-squared value of the unconstrained SIM is 0.234.
+```{r}
+CalcRSquared(uncSIM$data$TRIPS, uncSIM$fitted.values)
+```
+
+The McFadden’s R-squared value of the SIM (a metric commonly used to evaluate the goodness-of-fit in logistic and Poisson regression models) is 0.437.
+```{r}
+r2_mcfadden(uncSIM)
+```
+:::
+
+## 3.5 Origin-constrained SIM
+We calibrate an origin-constrained SIM as follows:
+
+```{r}
+orcSIM <- glm(formula = TRIPS ~ 
+                ORIGIN_SZ +
+                log(DESTIN_AGE7_12) +
+                log(DESTIN_AGE13_24) +
+                log(DESTIN_AGE25_64) +
+                log(dist),
+              family = poisson(link = "log"),
+              data = SIM_data,
+              na.action = na.exclude)
+summary(orcSIM)
+```
+The R-squared value of the origin-constrained SIM is 0.425.
+```{r}
+CalcRSquared(orcSIM$data$TRIPS, orcSIM$fitted.values)
+```
+
+## 3.6 Destination-constrained SIM
+We calibrate a destination-constrained SIM as follows:
+```{r}
+decSIM <- glm(formula = TRIPS ~ 
+                DESTIN_SZ + 
+                log(ORIGIN_AGE7_12) + 
+                log(ORIGIN_AGE13_24) + 
+                log(ORIGIN_AGE25_64) + 
+                log(dist),
+              family = poisson(link = "log"),
+              data = SIM_data,
+              na.action = na.exclude)
+summary(decSIM)
+```
+The R-squared value of the destination-constrained SIM is 0.513.
+```{r}
+CalcRSquared(decSIM$data$TRIPS, decSIM$fitted.values)
+```
+
+## 3.7 Doubly-constrained SIM
+We calibrate a doubly-constrained SIM as follows:
+```{r}
+dbcSIM <- glm(formula = TRIPS ~ 
+                ORIGIN_SZ + 
+                DESTIN_SZ + 
+                log(dist),
+              family = poisson(link = "log"),
+              data = SIM_data,
+              na.action = na.exclude)
+summary(dbcSIM)
+```
+The R-squared value of the doubly-constrained SIM is 0.574.
+```{r}
+CalcRSquared(dbcSIM$data$TRIPS, dbcSIM$fitted.values)
+```
+
+## 3.8 Model comparison
+We could compare the model performance using the root mean squared error (RMSE). We first create a list of the four models.
+```{r}
+model_list <- list(unconstrained=uncSIM,
+                   originConstrained=orcSIM,
+                   destinationConstrained=decSIM,
+                   doublyConstrained=dbcSIM)
+```
+
+We then compute the RMSE of all the models using the `compare_performance()` function from the `performance` package. The results show that doubly constrained SIM is the best model with the smallest RMSE value of 3252.
+```{r}
+compare_performance(model_list,
+                    metrics = "RMSE")
+```
+
+## 3.9 Visualising fitted values
+In this section, we will visualise the observed values against the fitted values.
+
+::: panel-tabset
+### Extract models' fitted values
+The code below extracts the fitted values from each model and appends them to the `SIM_data` dataset.
+
+```{r}
+# Unconstrained SIM
+df <- as.data.frame(uncSIM$fitted.values) %>%
+  round(digits = 0)
+
+SIM_data <- SIM_data %>%
+  cbind(df) %>%
+  rename(uncTRIPS = "uncSIM$fitted.values")
+```
+
+```{r}
+# Origin-constrained SIM
+df <- as.data.frame(orcSIM$fitted.values) %>%
+  round(digits = 0)
+
+SIM_data <- SIM_data %>%
+  cbind(df) %>%
+  rename(orcTRIPS = "orcSIM$fitted.values")
+```
+
+```{r}
+# Destination-constrained SIM
+df <- as.data.frame(decSIM$fitted.values) %>%
+  round(digits = 0)
+
+SIM_data <- SIM_data %>%
+  cbind(df) %>%
+  rename(decTRIPS = "decSIM$fitted.values")
+```
+
+```{r}
+# Doubly-constrained SIM
+df <- as.data.frame(dbcSIM$fitted.values) %>%
+  round(digits = 0)
+
+SIM_data <- SIM_data %>%
+  cbind(df) %>%
+  rename(dbcTRIPS = "dbcSIM$fitted.values")
+```
+
+### Visualisation
+
+```{r}
+#| code-fold: true
+unc_p <- ggplot(data = SIM_data,
+                aes(x = uncTRIPS,
+                    y = TRIPS)) +
+  geom_point() +
+  geom_smooth(method = lm)
+
+orc_p <- ggplot(data = SIM_data,
+                aes(x = orcTRIPS,
+                    y = TRIPS)) +
+  geom_point() +
+  geom_smooth(method = lm)
+
+dec_p <- ggplot(data = SIM_data,
+                aes(x = decTRIPS,
+                    y = TRIPS)) +
+  geom_point() +
+  geom_smooth(method = lm)
+
+dbc_p <- ggplot(data = SIM_data,
+                aes(x = dbcTRIPS,
+                    y = TRIPS)) +
+  geom_point() +
+  geom_smooth(method = lm)
+
+ggarrange(unc_p, orc_p, dec_p, dbc_p,
+          ncol = 2,
+          nrow = 2)
+```
+
+:::

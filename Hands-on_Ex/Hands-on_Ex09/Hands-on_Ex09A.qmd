@@ -2,7 +2,7 @@
 title: "Hands-on Ex 9A"
 subtitle: "Processing & Visualising Flow Data"
 author: "Stephen Tay"
-date: "26 Oct 2024"
+date: "2 Nov 2024"
 date-modified:  "last-modified"
 execute: 
   eval: true
@@ -12,3 +12,229 @@ execute:
 ---
 
 The hands-on exercise on **Modelling Geographical Accessibility** is in [Hands-on Ex 10](https://geospatialanalytics-stephentay.netlify.app/Hands-on_Ex/Hands-on_Ex10/Hands-on_Ex10.html)
+
+# 1. Overview
+**Spatial interaction (SI)** refers to the movement of people, goods, or information between locations, covering activities like freight shipments, energy flows, global trade, commutes, and pedestrian traffic. Defined broadly, SI is the flow of individuals, commodities, capital, and information across space, often influenced by decision-making (Fotheringham & O’Kelly, 1989). The key principle of SI is that individuals or entities weigh the benefits of interaction (such as commuting to work or migrating) against the costs of overcoming spatial distance (Fischer, 2001), a core concept for understanding spatial behavior.
+
+Each interaction forms an origin/destination (OD) pair, which can be organized in an OD matrix, mapping origins to destinations. In this exercise, we will build an OD matrix using **Passenger Volume by Origin Destination Bus Stops** data from LTA DataMall to explore SI in practical applications.
+
+The following R packages are used, with `stplanr` being the key package used for transport planning and modeling. It provides tools to download and clean transport data, map “desire lines” (the direct routes people prefer to take between locations), assign routes for travel (including options for cycling routes), calculate details about each route, like direction and traffic flow, and analyze areas reachable within specific travel times.
+```{r}
+pacman::p_load(tmap, sf, DT, stplanr, tidyverse)
+```
+
+# 2. Importing & Preparing Data
+We will import and work with three datasets:
+
+- **Bus Commuters by Origin/Destination** data from LTA DataMall
+-	**Bus Stop Locations**: Data on bus stop locations as of the last quarter of 2022.
+- **MPSZ-2019**: Sub-zone boundary data from the URA Master Plan 2019.
+
+::: panel-tabset
+
+## 1. Import Bus Commuters by Origin/Destination data
+```{r}
+odbus <- read_csv("data/aspatial/origin_destination_bus_202210.csv")
+glimpse(odbus)
+```
+## 2. Convert to proper data types
+Since `ORIGIN_PT_CODE` and `DESTINATION_PT_CODE` are in numeric data type, `as.factor()` function is used to convert it to character/factor data type.
+```{r}
+odbus$ORIGIN_PT_CODE <- as.factor(odbus$ORIGIN_PT_CODE)
+odbus$DESTINATION_PT_CODE <- as.factor(odbus$DESTINATION_PT_CODE) 
+```
+
+## 3. Extract study data
+For this exercise, we will focus on weekday commuting flows between 6:00 and 9:00 am. The eventual dataset is the total number of trips between origin and destination bus stops.
+```{r}
+odbus6_9 <- odbus %>%
+  filter(DAY_TYPE == "WEEKDAY") %>%
+  filter(TIME_PER_HOUR >= 6 &
+           TIME_PER_HOUR <= 9) %>%
+  group_by(ORIGIN_PT_CODE,
+           DESTINATION_PT_CODE) %>%
+  summarise(TRIPS = sum(TOTAL_TRIPS))
+```
+
+```{r}
+datatable(odbus6_9)
+```
+
+```{r}
+#| eval: false
+#| echo: false 
+write_rds(odbus6_9, "data/rds/odbus6_9.rds")
+```
+
+```{r}
+#| eval: false
+#| echo: false 
+odbus6_9 <- read_rds("data/rds/odbus6_9.rds")
+```
+
+## 4. Import bus stop locations
+We use `st_transform()` to transform the projection to CRS 3414.
+```{r}
+busstop <- st_read(dsn = "data/geospatial",
+                   layer = "BusStop") %>%
+  st_transform(crs = 3414)
+```
+## 5. Import MPSZ-2019
+We use `st_transform()` to transform the projection to CRS 3414.
+```{r}
+mpsz <- st_read(dsn = "data/geospatial",
+                layer = "MPSZ-2019") %>%
+  st_transform(crs = 3414)
+```
+
+```{r}
+mpsz
+```
+
+## 6. Retrieve planning subzone of each bus stop
+As the flow analysis is at the subzonal level, we will need to retrieve the planning subzone code (SUBZONE_C) for each bus stop. The `st_intersection()` function performs a point-in-polygon overlay, resulting in a point sf dataframe that matches each bus stop to its respective subzone. Next, `select()` is used to retain only `BUS_STOP_N` and `SUBZONE_C` in the `busstop_mpsz` data frame.
+
+Note that five bus stops are excluded from the result as they fall outside Singapore’s boundary.
+```{r}
+busstop_mpsz <- st_intersection(busstop, mpsz) %>%
+  select(BUS_STOP_N, SUBZONE_C) %>%
+  st_drop_geometry()
+```
+
+The code below found that there were duplicated bus stop records.
+```{r}
+duplicate <- busstop_mpsz %>%
+  group_by_all() %>%
+  filter(n()>1) %>%
+  ungroup()
+duplicate
+```
+
+We use `unique()` to de-duplicate the records.
+```{r}
+busstop_mpsz <- unique(busstop_mpsz)
+```
+
+```{r}
+datatable(busstop_mpsz)
+```
+
+## 7. Combine origin bus stops with mpsz
+Next, we append the planning subzone code from `busstop_mpsz` dataframe to the **origin** bus stops from `odbus6_9` dataframe.
+```{r}
+od_data <- left_join(odbus6_9 , busstop_mpsz,
+            by = c("ORIGIN_PT_CODE" = "BUS_STOP_N")) %>%
+  rename(ORIGIN_BS = ORIGIN_PT_CODE,
+         ORIGIN_SZ = SUBZONE_C,
+         DESTIN_BS = DESTINATION_PT_CODE)
+```
+
+We can use the code below to check for duplicated records.
+```{r}
+duplicate <- od_data %>%
+  group_by_all() %>%
+  filter(n()>1) %>%
+  ungroup()
+duplicate
+```
+
+If there are duplicated records, we use `unique()` to de-duplicate them.
+```{r}
+od_data <- unique(od_data)
+```
+
+## 8. Combine destination bus stops with mpsz
+Now, we append the planning subzone code from `busstop_mpsz` dataframe to the **destination** bus stops from `odbus6_9` dataframe.
+```{r}
+od_data <- left_join(od_data , busstop_mpsz,
+            by = c("DESTIN_BS" = "BUS_STOP_N")) 
+```
+
+We can use the code below to check for duplicated records.
+```{r}
+duplicate <- od_data %>%
+  group_by_all() %>%
+  filter(n()>1) %>%
+  ungroup()
+duplicate
+```
+
+If there are duplicated records, we use `unique()` to de-duplicate them.
+```{r}
+od_data <- unique(od_data)
+glimpse(od_data)
+```
+
+## 9. Final data wrangling
+In the final step, we remove rows with null values in either the origin or destination subzone, then aggregate the total number of trips for each origin-destination subzone pair.
+```{r}
+od_data <- od_data %>%
+  rename(DESTIN_SZ = SUBZONE_C) %>%
+  drop_na() %>%
+  group_by(ORIGIN_SZ, DESTIN_SZ) %>%
+  summarise(MORNING_PEAK = sum(TRIPS))
+glimpse(od_data)
+```
+
+```{r}
+#| eval: false
+#| echo: false 
+write_rds(od_data, "data/rds/od_data_fii.rds")
+```
+
+```{r}
+#| eval: false
+#| echo: false 
+od_data <- read_rds("data/rds/od_data_fii.rds")
+```
+:::
+
+# 3. Visualising Spatial Interaction
+In this section, we will visualise “desire lines” (the routes people prefer to take between locations) using the `stplanr` package.
+
+## 3.1 Remove intra-zonal flows
+This study excludes intra-zonal flows, so they are removed from the analysis.
+```{r}
+od_data_fij <- od_data[od_data$ORIGIN_SZ != od_data$DESTIN_SZ,]
+```
+
+## 3.2 Create inter-zonal desire lines
+We use the `od2line()` function from the `stplanr` package to create inter-zonal desire lines.
+```{r}
+flowLine <- od2line(flow = od_data_fij, 
+                    zones = mpsz,
+                    zone_code = "SUBZONE_C")
+```
+
+## 3.3 Visualise desire lines
+
+::: panel-tabset
+### Desire lines on weekday morning peak hours
+The map below shows inter-zonal bus commuter flows on weekdays between 6:00 and 9:00 am.
+```{r}
+tm_shape(mpsz) +
+  tm_polygons() +
+flowLine %>%  
+tm_shape() +
+  tm_lines(lwd = "MORNING_PEAK",
+           style = "quantile",
+           scale = c(0.1, 1, 3, 5, 7, 10),
+           n = 6,
+           alpha = 0.5)
+```
+
+### Filtering high-intensity desire lines
+When inter-zonal bus commuter flows are complex or highly skewed, it can be effective to focus on selected flows, such as those with values greater than or equal to 5,000, as shown below.
+```{r}
+tm_shape(mpsz) +
+  tm_polygons() +
+flowLine %>%  
+  filter(MORNING_PEAK >= 5000) %>%
+tm_shape() +
+  tm_lines(lwd = "MORNING_PEAK",
+           style = "quantile",
+           scale = c(0.1, 1, 3, 5, 7, 10),
+           n = 6,
+           alpha = 0.5)
+```
+:::
