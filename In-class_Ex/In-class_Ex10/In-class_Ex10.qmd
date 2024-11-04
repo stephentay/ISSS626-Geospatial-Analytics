@@ -1,0 +1,896 @@
+---
+title: "In-class Ex 10"
+subtitle: ""
+author: "Stephen Tay"
+date: "4 Nov 2024"
+date-modified:  "last-modified"
+execute: 
+  eval: true
+  echo: true
+  message: false
+  warning: false
+  freeze: true 
+---
+
+# 1. Overview
+
+In this exercise, we will walk through the steps of **Spatial Interaction analysis** and highlight key tips. This exercise follows a similar approach to [Hands-on Ex 9A](https://geospatialanalytics-stephentay.netlify.app/hands-on_ex/hands-on_ex09/hands-on_ex09a) and [9B](https://geospatialanalytics-stephentay.netlify.app/hands-on_ex/hands-on_ex09/hands-on_ex09b).
+
+```{r}
+pacman::p_load(tmap, sf, sp, DT, stplanr, performance, reshape2, ggpubr, tidyverse)
+```
+
+# 2. Importing & Preparing Data
+
+We will import and work with three datasets:
+
+-   **Bus Commuters by Origin/Destination** data from LTA DataMall
+-   **Bus Stop Locations**: Data on bus stop locations as of the last quarter of 2022.
+-   **MPSZ-2019**: Sub-zone boundary data from the URA Master Plan 2019.
+
+## 2.1 Bus Commuters by Origin/Destination data
+```{r}
+odbus <- read_csv("data/aspatial/origin_destination_bus_202210.csv")
+odbus$ORIGIN_PT_CODE <- as.factor(odbus$ORIGIN_PT_CODE)
+odbus$DESTINATION_PT_CODE <- as.factor(odbus$DESTINATION_PT_CODE) 
+```
+
+```{r}
+odbus6_9 <- odbus %>%
+  filter(DAY_TYPE == "WEEKDAY") %>%
+  filter(TIME_PER_HOUR >= 6 &
+           TIME_PER_HOUR <= 9) %>%
+  group_by(ORIGIN_PT_CODE,
+           DESTINATION_PT_CODE) %>%
+  summarise(TRIPS = sum(TOTAL_TRIPS))
+```
+
+```{r}
+datatable(odbus6_9)
+```
+
+## 2.2 Bus stop locations
+
+```{r}
+busstop <- st_read(dsn = "data/geospatial",
+                   layer = "BusStop") %>%
+  st_transform(crs = 3414)
+```
+
+## 2.3 MPSZ-2019
+
+```{r}
+mpsz <- st_read(dsn = "data/geospatial",
+                layer = "MPSZ-2019") %>%
+  st_transform(crs = 3414)
+```
+
+## 2.4 Retrieve planning subzone of each bus stop
+When using `st_intersection()`, we overlay busstop on the planning subzone. The resulting output is still at the bus stop level.
+```{r}
+busstop_mpsz <- st_intersection(busstop, mpsz) %>%
+  select(BUS_STOP_N, SUBZONE_C) %>%
+  st_drop_geometry()
+```
+
+## 2.5 Combine origin/destination bus stops with mpsz
+
+We retrieve the subzone id for the origin bus stops:
+```{r}
+od_data <- left_join(odbus6_9 , busstop_mpsz,
+            by = c("ORIGIN_PT_CODE" = "BUS_STOP_N")) %>%
+  rename(ORIGIN_BS = ORIGIN_PT_CODE,
+         ORIGIN_SZ = SUBZONE_C,
+         DESTIN_BS = DESTINATION_PT_CODE)
+```
+
+We can use the code below to check for duplicated records.
+
+```{r}
+duplicate <- od_data %>%
+  group_by_all() %>%
+  filter(n()>1) %>%
+  ungroup()
+duplicate
+```
+
+If there are duplicated records, we use `unique()` to de-duplicate them.
+
+```{r}
+od_data <- unique(od_data)
+```
+
+We retrieve the subzone id for the destination bus stops:
+```{r}
+od_data <- left_join(od_data , busstop_mpsz,
+            by = c("DESTIN_BS" = "BUS_STOP_N")) 
+```
+
+We can use the code below to check for duplicated records.
+
+```{r}
+duplicate <- od_data %>%
+  group_by_all() %>%
+  filter(n()>1) %>%
+  ungroup()
+duplicate
+```
+
+If there are duplicated records, we use `unique()` to de-duplicate them.
+
+```{r}
+od_data <- unique(od_data)
+```
+
+In the final step, we remove rows with null values in either the origin or destination subzone, then aggregate the total number of trips for each origin-destination subzone pair.
+
+```{r}
+od_data <- od_data %>%
+  rename(DESTIN_SZ = SUBZONE_C) %>%
+  drop_na() %>%
+  group_by(ORIGIN_SZ, DESTIN_SZ) %>%
+  summarise(MORNING_PEAK = sum(TRIPS))
+glimpse(od_data)
+```
+# 3. Visualising Spatial Interaction
+## 3.1 Remove intra-zonal flows
+
+This study excludes intra-zonal flows, so they are removed from the analysis.
+
+```{r}
+od_data_fij <- od_data[od_data$ORIGIN_SZ != od_data$DESTIN_SZ,]
+```
+
+## 3.2 Create inter-zonal desire lines
+
+We use the `od2line()` function from the `stplanr` package to create inter-zonal desire lines.
+
+```{r}
+flowLine <- od2line(flow = od_data_fij, 
+                    zones = mpsz,
+                    zone_code = "SUBZONE_C")
+```
+
+## 3.3 Visualise desire lines
+
+::: panel-tabset
+### Desire lines on weekday morning peak hours
+
+The map below shows inter-zonal bus commuter flows on weekdays between 6:00 and 9:00 am.
+
+```{r}
+tm_shape(mpsz) +
+  tm_polygons() +
+flowLine %>%  
+tm_shape() +
+  tm_lines(lwd = "MORNING_PEAK",
+           style = "quantile",
+           scale = c(0.1, 1, 3, 5, 7, 10),
+           n = 6,
+           alpha = 0.5)
+```
+
+### Filtering high-intensity desire lines
+
+When inter-zonal bus commuter flows are complex or highly skewed, it can be effective to focus on selected flows, such as those with values greater than or equal to 5,000, as shown below.
+
+```{r}
+tm_shape(mpsz) +
+  tm_polygons() +
+flowLine %>%  
+  filter(MORNING_PEAK >= 5000) %>%
+tm_shape() +
+  tm_lines(lwd = "MORNING_PEAK",
+           style = "quantile",
+           scale = c(0.1, 1, 3, 5, 7, 10),
+           n = 6,
+           alpha = 0.5)
+```
+:::
+
+# 4. Prepare distance matrix between planning subzones
+
+## 4.1 Convert to sp dataframe
+Before computing the distance matrix (i.e., distances between pairs of locations), we convert the sf dataframe to an sp dataframe. Although the distance matrix can be computed directly from an sf dataframe, the sp method is generally more time-efficient.
+```{r}
+mpsz_sp <- as(mpsz, "Spatial")
+mpsz_sp
+```
+
+## 4.2 Compute distance matrix
+We use the spDists() function from the sp package to compute the Euclidean distance between the centroids of the planning subzones.
+```{r}
+dist <- spDists(mpsz_sp, 
+                longlat = FALSE)
+head(dist, n=c(10, 10))
+```
+
+## 4.3 Label row and column headers of distance matrix
+Since the row and column headers of the distance matrix are unlabeled, we perform the following steps to add labels for the planning subzone codes:
+
+-	Create a list of planning subzone codes sorted to match the order of the distance matrix.
+-	Attach SUBZONE_C labels to the rows and columns of the distance matrix for alignment.
+```{r}
+sz_names <- mpsz$SUBZONE_C
+
+colnames(dist) <- paste0(sz_names)
+rownames(dist) <- paste0(sz_names)
+
+head(dist, n=c(5, 5))
+```
+## 4.4 Convert distance matrix to long table format
+We use the `melt()` function to convert the distance matrix into a long-table format. Note that intra-zonal distances are 0.
+```{r}
+distPair <- melt(dist) %>%
+  rename(dist = value)
+head(distPair, 10)
+```
+## 4.5 Update intra-zonal distance
+We assign a small non-zero constant to replace intra-zonal distances of 0.
+
+First, we find out the minimum inter-zonal distance using `summary()`.
+```{r}
+distPair %>%
+  filter(dist > 0) %>%
+  summary()
+```
+We assign a constant of 50m to replace intra-zonal distances.
+```{r}
+distPair$dist <- ifelse(distPair$dist == 0,
+                        50, distPair$dist)
+
+distPair %>%
+  summary()
+```
+
+We rename the variables for clarity.
+```{r}
+distPair <- distPair %>%
+  rename(orig = Var1,
+         dest = Var2)
+```
+
+## 4.6 Prepare flow data
+
+::: panel-tabset
+### 1. Import OD matrix of bus commuter flow
+The OD matrix of bus commuter flow was computed in Ex 9A. We will import the OD matrix for this exercise.
+```{r}
+od_data_fii <- read_rds("data/rds/od_data_fii.rds")
+```
+
+### 2. Compute total bus commuter trips
+We compute the total commuter trips between and within planning subzones as follows:
+```{r}
+flow_data <- od_data_fii %>%
+  group_by(ORIGIN_SZ, DESTIN_SZ) %>% 
+  summarize(TRIPS = sum(MORNING_PEAK)) 
+head(flow_data, 10)
+```
+
+### 3. Add new fields for intra-zonal flows
+Two new fields specific to intra-zonal flows are added to the dataset.
+```{r}
+flow_data$FlowNoIntra <- ifelse(
+  flow_data$ORIGIN_SZ == flow_data$DESTIN_SZ, 
+  0, flow_data$TRIPS)
+flow_data$offset <- ifelse(
+  flow_data$ORIGIN_SZ == flow_data$DESTIN_SZ, 
+  0.000001, 1)
+glimpse(flow_data)
+```
+
+### 4. Combine flow data with distance
+Before joining the flow data with the distance dataset, we need to convert the origin and destination subzones to factor data types.
+```{r}
+flow_data$ORIGIN_SZ <- as.factor(flow_data$ORIGIN_SZ)
+flow_data$DESTIN_SZ <- as.factor(flow_data$DESTIN_SZ)
+
+flow_data1 <- flow_data %>%
+  left_join(distPair,
+            by = c("ORIGIN_SZ" = "orig", "DESTIN_SZ" = "dest"))
+glimpse(flow_data1)
+```
+:::
+
+## 4.7 
+### 1. Import sub-zone population data
+```{r}
+pop <- read_csv("data/aspatial/pop.csv")
+glimpse(pop)
+```
+
+### 2. Append subzone code
+We left join pop dataset with mpsz dataset to retrieve the subzone codes.
+```{r}
+pop <- pop %>%
+  left_join(mpsz,
+            by = c("PA" = "PLN_AREA_N",
+                   "SZ" = "SUBZONE_N")) %>%
+  select(1:6) %>%
+  rename(SZ_NAME = SZ,
+         SZ = SUBZONE_C)
+glimpse(pop)
+```
+
+### 3. Prepare origin attribute
+We add origin attributes to the flow data.
+```{r}
+flow_data1 <- flow_data1 %>%
+  left_join(pop,
+            by = c(ORIGIN_SZ = "SZ")) %>%
+  rename(ORIGIN_AGE7_12 = AGE7_12,
+         ORIGIN_AGE13_24 = AGE13_24,
+         ORIGIN_AGE25_64 = AGE25_64) %>%
+  select(-c(PA, SZ_NAME))
+```
+
+### 4. Prepare destination attribute
+We add destination attributes to the flow data.
+```{r}
+SIM_data <- flow_data1 %>%
+  left_join(pop,
+            by = c(DESTIN_SZ = "SZ")) %>%
+  rename(DESTIN_AGE7_12 = AGE7_12,
+         DESTIN_AGE13_24 = AGE13_24,
+         DESTIN_AGE25_64 = AGE25_64) %>%
+  select(-c(PA, SZ_NAME))
+glimpse(SIM_data)
+```
+
+## 3.3 Replace zero values with 0.99
+We replace all zero values in the affected explanatory variables with 0.99.
+```{r}
+SIM_data$DESTIN_AGE7_12 <- ifelse(
+  SIM_data$DESTIN_AGE7_12 == 0,
+  0.99, SIM_data$DESTIN_AGE7_12)
+SIM_data$DESTIN_AGE13_24 <- ifelse(
+  SIM_data$DESTIN_AGE13_24 == 0,
+  0.99, SIM_data$DESTIN_AGE13_24)
+SIM_data$DESTIN_AGE25_64 <- ifelse(
+  SIM_data$DESTIN_AGE25_64 == 0,
+  0.99, SIM_data$DESTIN_AGE25_64)
+SIM_data$ORIGIN_AGE7_12 <- ifelse(
+  SIM_data$ORIGIN_AGE7_12 == 0,
+  0.99, SIM_data$ORIGIN_AGE7_12)
+SIM_data$ORIGIN_AGE13_24 <- ifelse(
+  SIM_data$ORIGIN_AGE13_24 == 0,
+  0.99, SIM_data$ORIGIN_AGE13_24)
+SIM_data$ORIGIN_AGE25_64 <- ifelse(
+  SIM_data$ORIGIN_AGE25_64 == 0,
+  0.99, SIM_data$ORIGIN_AGE25_64)
+```
+
+```{r}
+summary(SIM_data)
+```
+
+## 3.4 Unconstrained SIM
+The model shows that there is a positive relationship (0.82) between origin age 13-24 with the flow. There is an inverse relationship between distance and the total trips (-0.686), which is expected.
+```{r}
+uncSIM <- glm(formula = TRIPS ~ 
+                log(ORIGIN_AGE7_12) + 
+                log(DESTIN_AGE7_12) +
+                log(ORIGIN_AGE13_24) + 
+                log(DESTIN_AGE13_24) +
+                log(ORIGIN_AGE25_64) + 
+                log(DESTIN_AGE25_64) +
+                log(dist),
+              family = poisson(link = "log"),
+              data = SIM_data,
+              na.action = na.exclude)
+uncSIM
+```
+We use McFadden’s R-squared which is metric for evaluating logistic, Poisson, and negative-binomial regression models.
+```{r}
+r2_mcfadden(uncSIM)
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
