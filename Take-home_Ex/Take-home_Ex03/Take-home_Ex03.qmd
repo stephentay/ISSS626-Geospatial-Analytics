@@ -1,0 +1,1426 @@
+---
+title: "Take Home Ex 3: Financial Inclusion in Uganda: An Explanatory Study Using Geographically Weighted Regression"
+subtitle: ""
+author: "Stephen Tay"
+date: "10 Nov 2024"
+date-modified:  "last-modified"
+execute: 
+  eval: true
+  echo: true
+  message: false
+  warning: false
+  freeze: true 
+---
+
+# 1. Overview
+
+## 1.1 Introduction
+
+**Financial inclusion** is a critical driver of economic growth, macroeconomic stability, and poverty reduction (Nguyen et al., 2021). Grounded in the Schumpeterian model, evidence from countries like Vietnam demonstrates how accessible financial services can empower individuals and businesses to invest, grow, and contribute to broader economic stability. When financial services are widely available, wealth distribution becomes more equitable across social groups. In contrast, when access is limited often to a select affluent population, only this group could grow their wealth, while economically disadvantaged households struggle to get the funding they need (Hamden et al., 2022; Kaliba, Bishagazi, & Gongwe, 2023).
+
+In Uganda, approximately 76% of the population resides in rural areas, with agriculture as the main source of income (Hamden et al., 2022). Since the introduction of mobile money in 2009, over 80% of Ugandan adults have acquired a mobile money account, making it the most commonly used financial service (FinScope, 2024; Hamden et al., 2022). However, active account usage remains low, with only 49% of account holders using mobile money regularly (Hamden et al., 2022). While mobile phone ownership and internet access have grown substantially, significant gender and regional gaps persist, particularly affecting rural and marginalised communities such as females (FinScope, 2024). These disparities highlight the challenge of creating a fully inclusive financial system that reaches all demographic groups.
+
+Although previous studies have explored factors influencing financial inclusion, they often take a generalised approach, overlooking geographical variations. This study addresses this gap by applying **geographically weighted regression (GWR)** to analyse the factors influencing financial inclusion in Uganda at the district level. By adopting this approach, this study aims to uncover district-level factors and patterns of financial inclusion, offering insights that can inform targeted policies and interventions.
+
+## 1.2 Datasets
+
+This study utilises two key datasets:
+
+-   [**FinScope Uganda 2023 Survey Dataset**](https://fsduganda.or.ug/data-sets-finscope-uganda-2023-survey-report/): This aspatial dataset includes responses from 3,176 Ugandan adults (aged 16 and older), providing insights into attitudes and behaviors around money management, financial products, and services. Respondents were selected through a rigorous stratified sampling process to ensure representativeness.
+-   **Uganda District Boundaries (2020)**: Geographical boundary data obtained from [geoBoundaries](www.geoboundaries.org), detailing the administrative district boundaries across Uganda.
+
+## 1.3 R Packages
+
+The following R packages are loaded for this study:
+
+```{r}
+pacman::p_load(olsrr, corrplot, ggpubr, sf, sfdep, GWmodel, tmap, tidyverse, gtsummary, ggstatsplot, performance, see, readxl)
+```
+
+# 2. Aspatial Data: Data Wrangling
+
+The **FinScope Uganda 2023 Survey Dataset** was loaded using the `read_excel()` function. The analyst conducted literature review and preliminary analyses to identify relevant survey questions and variables for the study, ensuring that selected questions contain no more than 15% missing data. The chosen fields cover demographics, income, digital connectivity and literacy, financial literacy, and various measures of financial inclusion. To streamline analysis, the `select()` function was used to isolate these variables, which were then renamed for easier identification and interpretation in subsequent analyses.
+
+```{r}
+fin_df <- read_excel("data/aspatial/FinScope-2023_Dataset_Final.xlsx", 
+                     sheet="Final_Dataset") %>%
+  select(c(id=Interview_ID, district = District,
+           age, gender=c2, education=c4, household_size=n1_1,
+           rural_urban=Rural_Urban, employment=c5, agribusiness=m6_1,
+           income_source1=d2_2_11, income_source2=d2_2_12, income_source3=d2_2_13, 
+           income1=d3_31, income2=d3_32, income3=d3_33,
+           own_mobile_phone=c7_1_1, is_smartphone=c7_1_4, access_internet=c6_1_2, 
+           literacy_mobile=c6_2_1, literacy_internet=c6_2_2,
+           finliteracy_plan1=e5_11, finliteracy_plan2=e5_12, finliteracy_plan3=e5_13, 
+           finliteracy_plan4=e5_14, finliteracy_plan5=e5_16,  
+           finliteracy_save1=f1_1_1, finliteracy_save2=f1_1_3, finliteracy_save3=f1_1_4, 
+           finliteracy_aware1=g1_2, finliteracy_aware2=h2_1_3,  finliteracy_aware3=h2_1_4, 
+           finliteracy_aware4=h2_1_5, finliteracy_aware5=h2_1_8,  finliteracy_aware6=h2_1_9,
+           finincl_risk=j1,
+           finincl_save1=f20, finincl_save2=f3_1_1, finincl_save3=f3_1_2, 
+           finincl_save4=f3_1_3, finincl_save5=f3_1_4, finincl_save6=f3_1_5, 
+           finincl_save7=f3_1_6, finincl_save8=f3_1_8, finincl_save9=f3_1_9,
+           finincl_remit1=hpp1_1, finincl_remit2=hpp4_1,
+           finincl_pay1=hpb22, finincl_pay2=hpb23, finincl_pay3=hpb24, 
+           finincl_pay4=hpb25, finincl_pay5=hpb26, 
+           finincl_loan1=g14_1, finincl_loan2=g14_2, finincl_loan3=g14_3, 
+           finincl_loan4=g4_1, finincl_loan5=km10_1))
+
+head(fin_df)
+```
+
+To prepare the data for analysis, the analyst conducted distribution checks and addressed missing data (included coded values like 999), ensuring proper data treatment. For brevity, preliminary analyses, including distribution analysis, are not shown in this report. However, all steps were carefully executed to ensure data readiness.
+
+::: panel-tabset
+## 1. Demographics
+
+Demographic variables in this study include:
+
+-   **Age:** We created four age-band variables to capture meaningful life stages (16–24, 25–34, 35–44, and 45–54) for aggregation at the district level in subsequent regression analysis. This age-group structure represents the district-level age distribution while avoiding perfect multicollinearity by omitting the 55+ group. Each age group was coded using `if_else()`, tagging respondents within the group as 1, otherwise as 0.
+-   **Gender:** Females were tagged as 1 and males as 0.
+-   **Education:** Four education-level variables (primary, secondary, vocational, and degree) were created, with “no formal education” excluded to prevent multicollinearity.
+-   **Household Size:** Households of five or more members were considered large and tagged as 1.
+-   **Rural/Urban:** Respondents in rural areas were tagged as 1.
+-   **Employment Status:** We created three variables: formal employment, self-employment, and unemployment. An additional variable, “non-working,” was used for data wrangling but excluded from regression analysis.
+-   **Agricultural Business:** Involvement in such businesses were tagged as 1, otherwise as 0.
+
+Data preparation involved `mutate()`, `if_else()`, and/or `case_when()` functions, replacing coded missing values (e.g., 999, 998) with `NA_real_` to specify a numeric NA type. Variables that are no longer needed are removed using `select()` and `-c()` functions.
+
+```{r}
+fin_df1 <- fin_df %>%
+  mutate(age16_24 = if_else(age <= 24, 1, 0),
+         age25_34 = if_else(age >= 25 & age <= 34, 1, 0),
+         age35_44 = if_else(age >= 35 & age <= 44, 1, 0),
+         age45_54 = if_else(age >= 45 & age <= 54, 1, 0)) %>%
+  mutate(gender_female = if_else(gender == 2, 1, 0)) %>%
+  mutate(education_pri = if_else(education %in% c(2,3), 1, 0),
+         education_sec = if_else(education %in% c(4,5), 1, 0),
+         education_voc = if_else(education %in% c(6,7), 1, 0),
+         education_deg = if_else(education == 8, 1, 0)) %>%
+  mutate(household_big = if_else(household_size %in% c(2,3), 1, 0)) %>%
+  mutate(is_rural = if_else(rural_urban == "Rural", 1, 0)) %>%
+  mutate(employment_formal = case_when(employment %in% c(3,4,6) ~ 1,
+                                       employment == 99 ~ NA_real_,
+                                       TRUE ~ 0),
+         employment_self = case_when(employment %in% c(1,2) ~ 1,
+                                     employment == 99 ~ NA_real_,
+                                     TRUE ~ 0),
+         employment_unemployed = case_when(employment == 7 ~ 1,
+                                           employment == 99 ~ NA_real_,
+                                           TRUE ~ 0),
+         employment_nonworking = case_when(employment %in% c(7,5,8,9,10) ~ 1,
+                                           employment == 99 ~ NA_real_,
+                                           TRUE ~ 0)) %>%
+  mutate(is_agribusiness = if_else(agribusiness == 1, 1, 0)) %>%
+  select(-c(age, gender, education, household_size, rural_urban, employment, agribusiness))
+```
+
+## 2. Earned Income
+
+To determine individuals’ earned income, the following steps were performed:
+
+-   **Handling Missing Data:** `income1`, `income2`, and `income3` represent the reported income levels of individuals. Values coded as missing in these three variables were replaced with `NA_real_`.
+-   **Filtering Earned Income:** Earned income was considered only if the income source was employment-related (i.e., not from investments, social transfers, or gifts). If income was derived from these non-earned sources or the individual was not working, the income was set to 0.
+-   **Selecting Highest Income Bracket:** Among the three earned income variables, the highest income bracket was chosen to represent earned income using `pmax()`. These values could not be summed as they are in income brackets rather than absolute amounts.
+-   **Categorising Income Levels:** We created three earned income categories: low (up to UGX 250K per month), medium (up to UGX 1M per month), and high.
+
+```{r}
+fin_df2 <- fin_df1 %>%
+  mutate(income1 = if_else(income1 %in% c(8,9,99,997,998), NA_real_, income1),
+         income2 = if_else(income2 %in% c(8,9,99,997,998), NA_real_, income2),
+         income3 = if_else(income3 %in% c(8,9,99,997,998), NA_real_, income3),
+         earned_income1 = case_when(income_source1 %in% c(5,6,7,8,9,10,11) ~ 0,
+                                    income_source1 %in% c(1,2,3,4) ~ income1,
+                                    employment_nonworking == 1 ~ 0,
+                                    TRUE ~ NA_real_),
+         earned_income2 = case_when(income_source2 %in% c(5,6,7,8,9,10,11) ~ 0,
+                                    income_source2 %in% c(1,2,3,4) ~ income2,
+                                    employment_nonworking == 1 ~ 0,
+                                    TRUE ~ NA_real_),
+         earned_income3 = case_when(income_source3 %in% c(5,6,7,8,9,10,11) ~ 0,
+                                    income_source3 %in% c(1,2,3,4) ~ income3,
+                                    employment_nonworking == 1 ~ 0,
+                                    TRUE ~ NA_real_),
+         earned_income = pmax(earned_income1, earned_income2, earned_income3)) %>%
+  mutate(earned_low = case_when(earned_income %in% c(1,2) ~ 1,
+                                is.na(earned_income) ~ NA_real_,
+                                TRUE ~ 0),
+         earned_med = case_when(earned_income %in% c(3,4) ~ 1,
+                                is.na(earned_income) ~ NA_real_,
+                                TRUE ~ 0),
+         earned_high = case_when(earned_income %in% c(5,6,7) ~ 1,
+                                is.na(earned_income) ~ NA_real_,
+                                TRUE ~ 0))
+```
+
+Additionally, we created a variable, `income_source_cnt`, to capture the number of income sources (earned, investment, social, and gift). Using the `rowwise()` function, we computed the total income sources for each individual, followed by `ungroup()` to reset the data frame and remove unnecessary variables.
+
+```{r}
+fin_df2 <- fin_df2 %>%
+  rowwise() %>%
+  mutate(income_source_cnt = sum(!income_source1 %in% c(10,11),
+                                 !income_source2 %in% c(10,11),
+                                 !income_source3 %in% c(10,11))) %>%
+  ungroup() %>%
+  select(-c(income1, income2, income3, earned_income,
+            earned_income1, earned_income2, earned_income3,
+            income_source1, income_source2, income_source3,
+            employment_nonworking))
+```
+
+## 3. Digital Connectivity & Literacy
+
+For digital connectivity and literacy, we considered three variables:
+
+-   **Mobile Ownership:** Tagged as 1 if the respondent owns a mobile phone (either smartphone or feature phone), otherwise 0.
+-   **Internet Access:** Tagged as 1 if the respondent has internet access, otherwise 0.
+-   **Digital Literacy:** Calculated as the sum of respondents’ comfort with using mobile phones and the internet, with 1 point assigned for each if `literacy_mobile == 1` and `literacy_internet == 1`.
+
+In the code, we used `relocate()` to position these variables as the last columns in the data frame. To compute digital literacy, `rowwise()` was applied before calculating the combined score for each individual. Finally, we removed variables that were no longer needed.
+
+```{r}
+fin_df3 <- fin_df2 %>% 
+  mutate(own_mobile_phone = if_else(own_mobile_phone == 1, 1, 0)) %>%
+  mutate(access_internet = if_else(access_internet == 1, 1, 0)) %>%
+  relocate(c(own_mobile_phone, access_internet), .after = last_col()) %>%
+  rowwise() %>%
+  mutate(digital_literacy = sum(literacy_mobile == 1,literacy_internet == 1)) %>%
+  ungroup() %>%
+  select(-c(is_smartphone, literacy_mobile, literacy_internet))
+```
+
+## 4A. Financial Literacy (Planning/Budgeting)
+
+Financial literacy is multifaceted and encompasses several dimensions. In this study, we assessed financial literacy through three key aspects, calculating a score for each:
+
+-   Financial Planning and Budgeting
+-   Saving Behaviours
+-   Awareness of Financial Products
+
+For **Financial Planning and Budgeting**, we computed a composite mean score for each individual based on their responses to the following five survey questions:
+
+-   You keep track of the money that you receive and spend
+-   You know how much money you spent last week
+-   You adjust your expenses according to the money you have available
+-   You make a plan or budget to manage your income and expenses
+-   I set long term financial goals and try to achieve them
+
+The five questions were recoded to binary values (1 for positive responses and 0 otherwise). To compute the composite mean score, `rowwise()` was applied, allowing the mean score to be computed for each individual. We removed variables that were no longer needed.
+
+```{r}
+fin_df4 <- fin_df3 %>%
+  mutate(finliteracy_plan1 = if_else(finliteracy_plan1 == 1, 1, 0),
+         finliteracy_plan2 = if_else(finliteracy_plan2 == 1, 1, 0),
+         finliteracy_plan3 = if_else(finliteracy_plan3 == 1, 1, 0),
+         finliteracy_plan4 = if_else(finliteracy_plan4 == 1, 1, 0),
+         finliteracy_plan5 = if_else(finliteracy_plan5 == 1, 1, 0)) %>%
+  rowwise() %>%
+  mutate(finliteracy_plan = mean(c(finliteracy_plan1, finliteracy_plan2, 
+                                   finliteracy_plan3, finliteracy_plan4,
+                                   finliteracy_plan5))) %>%
+  ungroup() %>%
+  select(-c(finliteracy_plan1, finliteracy_plan2, finliteracy_plan3, 
+            finliteracy_plan4, finliteracy_plan5))
+```
+
+## 4B. Financial Literacy (Saving Behaviours)
+
+For **Saving Behaviours**, we computed a composite mean score for each individual based on their responses to the following three survey questions:
+
+-   You sometimes do not buy things that you want so that you save money instead
+-   You get information about different ways of savings before you decide where/how to save
+-   You try different savings options to find the one where you can get the most interest.
+
+The three questions were recoded to binary values (1 for positive responses and 0 otherwise). To compute the composite mean score, `rowwise()` was applied, allowing the mean score to be computed for each individual. We removed variables that were no longer needed.
+
+```{r}
+fin_df4 <- fin_df4 %>%
+  mutate(finliteracy_save1 = if_else(finliteracy_save1 == 1, 1, 0),
+         finliteracy_save2 = if_else(finliteracy_save2 == 1, 1, 0),
+         finliteracy_save3 = if_else(finliteracy_save3 == 1, 1, 0)) %>%
+  rowwise() %>%
+  mutate(finliteracy_save = mean(c(finliteracy_save1, finliteracy_save2, finliteracy_save3))) %>%
+  ungroup() %>%
+  select(-c(finliteracy_save1, finliteracy_save2, finliteracy_save3))
+```
+
+## 4C. Financial Literacy (Awareness of Financial Products)
+
+For **Awareness of Financial Products**, we computed a composite mean score for each individual based on their awareness of the following common financial products:
+
+-   Digital loans
+-   Debit Cards
+-   Credit Cards
+-   Mobile or Internet Banking
+-   Mobile Money wallets or E-money wallets
+-   Remittance Channels, e.g., MoneyGram, Western Union
+
+The six questions were recoded to binary values (1 for positive responses and 0 otherwise). To compute the composite mean score, `rowwise()` was applied, allowing the mean score to be computed for each individual. We removed variables that were no longer needed.
+
+```{r}
+fin_df4 <- fin_df4 %>%
+  mutate(finliteracy_aware1 = if_else(finliteracy_aware1 == 1, 1, 0),
+         finliteracy_aware2 = if_else(finliteracy_aware2 == 1, 1, 0),
+         finliteracy_aware3 = if_else(finliteracy_aware3 == 1, 1, 0),
+         finliteracy_aware4 = if_else(finliteracy_aware4 == 1, 1, 0),
+         finliteracy_aware5 = if_else(finliteracy_aware5 == 1, 1, 0),
+         finliteracy_aware6 = if_else(finliteracy_aware6 == 1, 1, 0)) %>%
+  rowwise() %>%
+  mutate(finliteracy_aware = mean(c(finliteracy_aware1, finliteracy_aware2, 
+                                    finliteracy_aware3, finliteracy_aware4,
+                                    finliteracy_aware5, finliteracy_aware6))) %>%
+  ungroup() %>%
+  select(-c(finliteracy_aware1, finliteracy_aware2, finliteracy_aware3, 
+            finliteracy_aware4, finliteracy_aware5, finliteracy_aware6))
+```
+
+## 5A. Financial Inclusion (Insurance Products)
+
+We followed the methodology used by Nguyen et al. (2021) to calculate a composite score for **financial inclusion**, focusing on aspects aligned with its core definition:
+
+-   Access to Insurance Products
+-   Access to Common Savings Mechanisms
+-   Access to Remittance Services
+-   Access to Common Payment Channels
+-   Credit Access
+
+Each respondent could receive a maximum score of 1 for having access to insurance, remittance, or credit products/services. For savings and payments, a maximum score of 2 was assigned, reflecting their centrality in everyday financial activity. This higher weighting acknowledges their frequent usage in daily transactions.
+
+For **insurance products**, the assessment relied on a single question:
+
+-   Do you have any existing insurance policy?
+
+Responses were recoded to binary values (1 for positive responses, 0 otherwise) and relocated to the last column of the dataset.
+
+```{r}
+fin_df5 <- fin_df4 %>%
+  mutate(finincl_risk = if_else(finincl_risk == 1, 1, 0)) %>%
+  relocate(finincl_risk, .after = last_col()) 
+```
+
+## 5B. Financial Inclusion (Savings Mechanisms)
+
+For **Savings Mechanism**, we computed a composite score (maximum 2 points) for each individual based on responses to the following common saving mechanisms:
+
+-   Have you ever saved electronically?
+
+Saved in the last 12 months in... - Commercial Bank - Credit Institution - MDI - Savings and credit cooperatives (SACCOs) including shares - Microfinance Institutions - Mobile money - Savings group (VSLA, ROSCA) - Investment club
+
+Each question was recoded to binary values (1 for positive responses and 0 otherwise). To compute the composite score, `rowwise()` was applied to sum the responses for each individual. We used `pmin()` to cap the total at 2 points. Variables no longer needed were removed.
+
+```{r}
+fin_df5 <- fin_df5 %>%
+  mutate(finincl_save1 = if_else(finincl_save1 == 1, 1, 0),
+         finincl_save2 = case_when(finincl_save2 == 1 ~ 1,
+                                   TRUE ~ 0),
+         finincl_save3 = case_when(finincl_save3 == 1 ~ 1,
+                                   TRUE ~ 0),
+         finincl_save4 = case_when(finincl_save4 == 1 ~ 1,
+                                   TRUE ~ 0),
+         finincl_save5 = case_when(finincl_save5 == 1 ~ 1,
+                                   TRUE ~ 0),
+         finincl_save6 = case_when(finincl_save6 == 1 ~ 1,
+                                   TRUE ~ 0),
+         finincl_save7 = case_when(finincl_save7 == 1 ~ 1,
+                                   TRUE ~ 0),
+         finincl_save8 = case_when(finincl_save8 == 1 ~ 1,
+                                   TRUE ~ 0),
+         finincl_save9 = case_when(finincl_save9 == 1 ~ 1,
+                                   TRUE ~ 0)) %>%
+  rowwise() %>%
+  mutate(finincl_save = sum(finincl_save1, finincl_save2, finincl_save3,
+                            finincl_save4, finincl_save5, finincl_save6,
+                            finincl_save7, finincl_save8, finincl_save9),
+         finincl_save = pmin(finincl_save, 2)) %>%
+  ungroup() %>%
+  select(-c(finincl_save1, finincl_save2, finincl_save3,
+            finincl_save4, finincl_save5, finincl_save6,
+            finincl_save7, finincl_save8, finincl_save9))
+```
+
+## 5C. Financial Inclusion (Remittance Services)
+
+For **Remittance Services**, we computed a composite score (maximum 1 point) for each individual based on responses to the following 2 questions:
+
+-   In the past 12 months, have you sent money to someone in a different place within the country or outside of Uganda?
+-   In the past 12 months, have you received money from someone in a different place within the country or from outside the country?
+
+Each question was recoded to binary values (1 for positive responses and 0 otherwise). We used `pmax()` to cap the total at 1 point. Variables no longer needed were removed.
+
+```{r}
+fin_df5 <- fin_df5 %>%
+  mutate(finincl_remit1 = if_else(finincl_remit1 == 1, 1, 0),
+         finincl_remit2 = if_else(finincl_remit2 == 1, 1, 0),
+         finincl_remit = pmax(finincl_remit1, finincl_remit2)) %>%
+  select(-c(finincl_remit1, finincl_remit2))
+```
+
+## 5D. Financial Inclusion (Payment Channels)
+
+For **Payment Channels**, we computed a composite score (maximum 2 points) for each individual based on their usage to the following 5 common payment channels in the last 12 months:
+
+-   ATM / Debit card
+-   Credit card
+-   Bank transfer
+-   Mobile money
+-   Cheque
+
+Each question was recoded to binary values (1 for positive responses and 0 otherwise). To compute the composite score, `rowwise()` was applied to sum the responses for each individual. We used `pmin()` to cap the total at 2 points. Variables no longer needed were removed.
+
+```{r}
+fin_df5 <- fin_df5 %>%
+  mutate(finincl_pay1 = if_else(finincl_pay1 != 5, 1, 0),
+         finincl_pay2 = if_else(finincl_pay2 != 5, 1, 0),
+         finincl_pay3 = if_else(finincl_pay3 != 5, 1, 0),
+         finincl_pay4 = if_else(finincl_pay4 != 5, 1, 0),
+         finincl_pay5 = if_else(finincl_pay5 != 5, 1, 0)) %>%
+  rowwise() %>%
+  mutate(finincl_pay = sum(finincl_pay1, finincl_pay2, finincl_pay3,
+                           finincl_pay4, finincl_pay5),
+         finincl_pay = pmin(finincl_pay, 2)) %>%
+  ungroup() %>%
+  select(-c(finincl_pay1, finincl_pay2, finincl_pay3,
+            finincl_pay4, finincl_pay5))
+```
+
+## 5E. Financial Inclusion (Credit)
+
+For **Credits**, we computed a composite score (maximum 1 point) for each individual based on responses to the following 5 questions:
+
+-   Have you ever applied for a loan electronically?
+-   Have you ever received a loan disbursement/pay-out electronically?
+-   Have you made a loan payment electronically?
+-   Have you, in the past 12 months, been paying back money that you borrowed (e.g. mortgage, Boda loan etc) from anybody or any institution?
+-   Have you ever borrowed money through mobile money services?
+
+Each question was recoded to binary values (1 for positive responses and 0 otherwise). We used `pmax()` to cap the total at 1 point. Variables no longer needed were removed.
+
+```{r}
+fin_df5 <- fin_df5 %>%
+  mutate(finincl_loan1 = if_else(finincl_loan1 == 1, 1, 0),
+         finincl_loan2 = if_else(finincl_loan2 == 1, 1, 0),
+         finincl_loan3 = if_else(finincl_loan3 == 1, 1, 0),
+         finincl_loan4 = if_else(finincl_loan4 == 1, 1, 0),
+         finincl_loan5 = if_else(finincl_loan5 == 1, 1, 0),
+         finincl_loan = pmax(finincl_loan1, finincl_loan2, finincl_loan3,
+                             finincl_loan4, finincl_loan5)) %>%
+  select(-c(finincl_loan1, finincl_loan2, finincl_loan3,
+                             finincl_loan4, finincl_loan5))
+```
+
+## 5F. Total Financial Inclusion
+
+The total score for financial inclusion was a summation of their scores to:
+
+-   Access to Insurance Products (max 1 point)
+-   Access to Common Savings Mechanisms (max 2 points)
+-   Access to Remittance Services (max 1 point)
+-   Access to Common Payment Channels (max 2 points)
+-   Credit Access (max 1 point)
+
+```{r}
+fin_df5 <- fin_df5 %>%
+  rowwise() %>%
+  mutate(fin_inclusion = sum(finincl_risk, finincl_save, finincl_remit,
+                             finincl_pay, finincl_loan)) %>%
+  ungroup()
+head(fin_df5)
+```
+
+## 6. Checking Missing Data
+
+Before aggregating scores at the district level, we examined the percentage of missing data across variables. Employment-related variables have 0.6% missing data, while earned income variables have 12.7%. All other variables are complete. The level of missing data is considered acceptable, and cases with missing values were retained. During district-level aggregation for employment and earned income, missing values were ignored in the calculation of the mean, effectively imputing the mean for these cases.
+
+```{r}
+colMeans(is.na(fin_df5))
+```
+
+## 7. Aggregation to District Level
+
+In the final step of data wrangling, we convert district names to sentence case using `str_to_sentence()` function.
+
+Next, we use `group_by()` and `summarise()` to aggregate scores at the district level. For each metric, `mean()` is applied to calculate the average score or the proportion of cases with the specified attribute. The additional argument `na.rm = TRUE` is included to ignore missing values in the calculation, effectively imputing the mean for these cases.
+
+```{r}
+fin_df6 <- fin_df5 %>%
+  mutate(district = str_to_sentence(district)) %>%
+  group_by(district) %>%
+  summarise(fin_inclusion = mean(fin_inclusion),
+            age16_24 = mean(age16_24),
+            age25_34 = mean(age25_34),
+            age35_44 = mean(age35_44),
+            age45_54 = mean(age45_54),
+            gender_female = mean(gender_female),
+            education_pri = mean(education_pri),
+            education_sec = mean(education_sec),
+            education_voc = mean(education_voc),
+            education_deg = mean(education_deg),
+            household_big = mean(household_big),
+            is_rural = mean(is_rural),
+            employment_formal = mean(employment_formal, na.rm = TRUE),
+            employment_self = mean(employment_self, na.rm = TRUE),
+            employment_unemployed = mean(employment_unemployed, na.rm = TRUE),
+            is_agribusiness = mean(is_agribusiness),
+            earned_low = mean(earned_low, na.rm = TRUE),
+            earned_med = mean(earned_med, na.rm = TRUE),
+            earned_high = mean(earned_high, na.rm = TRUE),
+            income_source_cnt = mean(income_source_cnt),
+            own_mobile_phone = mean(own_mobile_phone),
+            access_internet = mean(access_internet),
+            digital_literacy = mean(digital_literacy),
+            finliteracy_plan = mean(finliteracy_plan),
+            finliteracy_save = mean(finliteracy_save),
+            finliteracy_aware = mean(finliteracy_aware)) %>%
+  ungroup()
+```
+
+```{r}
+head(fin_df6)
+```
+:::
+
+# 3. Geospatial data: Importing & Data Wrangling
+
+::: panel-tabset
+## 1. Importing Uganda District Map
+
+**Uganda District Boundaries** was imported using `st_read()`. It contains multipolygon features in the WGS 84 coordinates system. We used `st_transform()` to convert it to a projected coordinate system with [EPSG: 21096](https://epsg.io/21096).
+
+```{r}
+uga_district <- st_read(dsn = "data/geospatial",
+                        layer = "geoBoundaries-UGA-ADM3") %>%
+  st_transform(21096)
+```
+
+We check the coordinate system using `st_crs()`.
+
+```{r}
+st_crs(uga_district)
+```
+
+## 2. Geovisualisation
+
+The map reveals that some districts contain multiple islands, which may pose challenges when calculating each district’s centroid. Specifically, we want to avoid centroids that fall outside district boundaries, as this could impact subsequent analyses.
+
+```{r}
+tmap_mode('plot')
+tm_shape(uga_district) +
+  tm_borders()
+```
+
+## 3. Calculating Districts' Centroids
+
+We begin by selecting the required variables using `select()`, at the same time renaming "shapeName" to "district". Next, we use `st_cast()` to convert each multipolygon feature to individual polygon features and apply `st_area()` to calculate the area of each polygon.
+
+We then group by district and filter for the polygon with the largest surface area to represent the district. This step essentially removed smaller islands from the district. The area variable is removed as it is no longer needed.
+
+Finally, we compute the centroid for each district using the `st_point_on_surface()` function.
+
+```{r}
+polygon_area <- uga_district %>%
+  select(district = shapeName, geometry) %>%
+  st_cast("POLYGON") %>%
+  mutate(area = st_area(.))
+
+uga_district2 <- polygon_area %>%
+  group_by(district) %>%
+  filter(area == max(area)) %>%
+  ungroup() %>%
+  select(-c(area)) %>%
+  mutate(centroid = st_point_on_surface(geometry))
+glimpse(uga_district2)
+```
+
+When we examined the map, we see that each centroid falls within each polygon.
+
+```{r}
+tmap_mode('view')
+tm_shape(uga_district2) +
+  tm_borders() +
+  tm_shape(st_sf(geometry = uga_district2$centroid)) +
+  tm_dots(col = "red") +
+  tm_view(set.zoom.limits = c(6,9))
+```
+
+```{r}
+#| echo: false
+tmap_mode("plot")
+```
+
+## 4. Check for Unmatched District Names
+
+In this step, we identify districts present in the FinScope dataset but missing from the GeoBoundaries data using the `anti_join()` function. The output reveals that ‘Rubirizi’ is in the FinScope dataset but not in GeoBoundaries due to a misspelling in the latter.
+
+```{r}
+unmatched1 <- fin_df6 %>% 
+  anti_join(uga_district2, by = "district") %>%
+  arrange(district) %>%
+  select(district)
+unmatched1
+```
+
+Next, we identify districts present in the GeoBoundaries data but missing from the FinScopre dataset using the `anti_join()` function. The output reveals that some districts were not surveyed by FinScope.
+
+```{r}
+unmatched2 <- uga_district2 %>% 
+  st_drop_geometry() %>%
+  anti_join(fin_df6, by = "district") %>%
+  arrange(district) %>%
+  select(district) %>%
+  mutate(`Unmatched Districts` = "Unmatched")
+unmatched2
+```
+
+## 5. Geospatial Data Wrangling
+
+In this step, we corrected the spelling of "Rubirizi" district in the geospatial dataset, and we also joined the list of unmatched districts and labelled districts that were matched or not matched.
+
+```{r}
+uga_district3 <- uga_district2 %>%
+  mutate(district = case_when(district == "Rubirzi" ~ "Rubirizi",
+                              TRUE ~ district)) %>%
+  left_join(unmatched2, by = 'district') %>%
+  mutate(`Unmatched Districts` = factor(case_when(`Unmatched Districts`=="Unmatched" ~ "Unmatched",
+                                                        TRUE ~ "Matched")))
+```
+
+The map below shows the 14 steps (coloured red) that are not surveyed. Since these districts are unrepresented, they would be removed in the next step.
+
+```{r}
+tmap_mode('plot')
+tm_shape(uga_district3) +
+  tm_polygons("Unmatched Districts", palette = c("lightgrey", "red")) +  
+  tm_shape(uga_district3 %>% filter(`Unmatched Districts` == "Unmatched")) +
+  tm_text("district", size = 0.6, col = "black", 
+          remove.overlap = TRUE) +
+  tm_layout(legend.position = c("left", "top"))
+tmap_mode('plot')
+```
+
+## 6. Combined Dataset
+
+We retained matched districts using `filter()` and removed the ‘Unmatched Districts’ variable, as it was no longer needed. We then performed a left join to merge the aggregated FinScope dataset with the geospatial data.
+
+```{r}
+uga_fin_sf <- uga_district3 %>%
+  filter(`Unmatched Districts` == "Matched") %>%
+  select(-c(`Unmatched Districts`)) %>%
+  left_join(fin_df6, by = 'district')
+glimpse(uga_fin_sf)
+```
+:::
+
+# 4. Exploratory Data Analysis
+
+::: panel-tabset
+## 1. Distribution of Explanatory Variables
+
+Multiple histograms of the 25 variables could be plotted using `ggarrange()` from `ggpubr` package.
+
+```{r}
+#| code-fold: true
+age16_24 <- ggplot(data = uga_fin_sf, aes(x = age16_24)) + 
+  geom_histogram(bins=20, color="black", fill="light blue")
+
+age25_34 <- ggplot(data = uga_fin_sf, aes(x = age25_34)) + 
+  geom_histogram(bins=20, color="black", fill="light blue")
+
+age35_44 <- ggplot(data = uga_fin_sf, aes(x = age35_44)) + 
+  geom_histogram(bins=20, color="black", fill="light blue")
+
+age45_54 <- ggplot(data = uga_fin_sf, aes(x = age45_54)) + 
+  geom_histogram(bins=20, color="black", fill="light blue")
+
+gender_female <- ggplot(data = uga_fin_sf, aes(x = gender_female)) + 
+  geom_histogram(bins=20, color="black", fill="light blue")
+
+education_pri <- ggplot(data = uga_fin_sf, aes(x = education_pri)) + 
+  geom_histogram(bins=20, color="black", fill="light blue")
+
+education_sec <- ggplot(data = uga_fin_sf, aes(x = education_sec)) + 
+  geom_histogram(bins=20, color="black", fill="light blue")
+
+education_voc <- ggplot(data = uga_fin_sf, aes(x = education_voc)) + 
+  geom_histogram(bins=20, color="black", fill="light blue")
+
+education_deg <- ggplot(data = uga_fin_sf, aes(x = education_deg)) + 
+  geom_histogram(bins=20, color="black", fill="light blue")
+
+household_big <- ggplot(data = uga_fin_sf, aes(x = household_big)) + 
+  geom_histogram(bins=20, color="black", fill="light blue")
+
+is_rural <- ggplot(data = uga_fin_sf, aes(x = is_rural)) + 
+  geom_histogram(bins=20, color="black", fill="light blue")
+
+employment_formal <- ggplot(data = uga_fin_sf, aes(x = employment_formal)) + 
+  geom_histogram(bins=20, color="black", fill="light blue")
+
+employment_self <- ggplot(data = uga_fin_sf, aes(x = employment_self)) + 
+  geom_histogram(bins=20, color="black", fill="light blue")
+
+employment_unemployed <- ggplot(data = uga_fin_sf, aes(x = employment_unemployed)) + 
+  geom_histogram(bins=20, color="black", fill="light blue")
+
+is_agribusiness <- ggplot(data = uga_fin_sf, aes(x = is_agribusiness)) + 
+  geom_histogram(bins=20, color="black", fill="light blue")
+
+earned_low <- ggplot(data = uga_fin_sf, aes(x = earned_low)) + 
+  geom_histogram(bins=20, color="black", fill="light blue")
+
+earned_med <- ggplot(data = uga_fin_sf, aes(x = earned_med)) + 
+  geom_histogram(bins=20, color="black", fill="light blue")
+
+earned_high <- ggplot(data = uga_fin_sf, aes(x = earned_high)) + 
+  geom_histogram(bins=20, color="black", fill="light blue")
+
+income_source_cnt <- ggplot(data = uga_fin_sf, aes(x = income_source_cnt)) + 
+  geom_histogram(bins=20, color="black", fill="light blue")
+
+own_mobile_phone <- ggplot(data = uga_fin_sf, aes(x = own_mobile_phone)) + 
+  geom_histogram(bins=20, color="black", fill="light blue")
+
+access_internet <- ggplot(data = uga_fin_sf, aes(x = access_internet)) + 
+  geom_histogram(bins=20, color="black", fill="light blue")
+
+digital_literacy <- ggplot(data = uga_fin_sf, aes(x = digital_literacy)) + 
+  geom_histogram(bins=20, color="black", fill="light blue")
+
+finliteracy_plan <- ggplot(data = uga_fin_sf, aes(x = finliteracy_plan)) + 
+  geom_histogram(bins=20, color="black", fill="light blue")
+
+finliteracy_save <- ggplot(data = uga_fin_sf, aes(x = finliteracy_save)) + 
+  geom_histogram(bins=20, color="black", fill="light blue")
+
+finliteracy_aware <- ggplot(data = uga_fin_sf, aes(x = finliteracy_aware)) + 
+  geom_histogram(bins=20, color="black", fill="light blue")
+
+ggarrange(age16_24, age25_34, age35_44, age45_54, gender_female, education_pri, 
+          education_sec, education_voc, education_deg, household_big, is_rural, 
+          employment_formal, employment_self, employment_unemployed, is_agribusiness, 
+          earned_low, earned_med, earned_high, income_source_cnt, own_mobile_phone, 
+          access_internet, digital_literacy, finliteracy_plan, finliteracy_save, 
+          finliteracy_aware, ncol = 4, nrow = 7)
+```
+
+## 2. Geospatial Distribution of Financial Inclusion
+
+The map illustrates the geospatial distribution of financial inclusion across Uganda, highlighting disparities in financial inclusion levels among districts.
+
+```{r}
+#| code-fold: true
+tmap_mode("view")
+tm_shape(uga_fin_sf) +
+  tm_polygons(alpha = 0.4) +
+  tm_shape(uga_fin_sf) +  
+  tm_dots(col = "fin_inclusion",
+          alpha = 0.6,
+          style="quantile",
+          title = "Financial Inclusion") +
+  tm_view(set.zoom.limits = c(6,9))
+```
+
+```{r}
+#| echo: false
+tmap_mode("plot")
+```
+
+## 3A. Correlation Analysis
+
+To prevent multicollinearity in multiple linear regression, we examined correlations between variables to identify those with high interdependence. Some variables, such as mobile phone ownership, internet access, and digital literacy, showed high correlations. While these variables are not removed at this stage, they will be closely monitored during subsequent multicollinearity testing.
+
+A visualization of the correlations among variables was created using `corrplot`.
+
+```{r}
+#| fig-width: 12
+#| fig-height: 10
+corrplot(cor(fin_df6[, 2:27]))
+```
+
+## 3B. Correlation Analysis
+
+An alternative visualization of the correlations was generated using the `ggcorrmat()` function from the ggstatsplot package, displaying both the magnitude and statistical significance of each correlation.
+
+```{r}
+#| fig-width: 12
+#| fig-height: 10
+ggcorrmat(fin_df6[, 2:27])
+```
+:::
+
+# 5. Multiple Linear Regression Model (Non-spatial model)
+
+## 5.1 Initial MLR Model
+
+We built an initial multiple linear regression (MLR) model with financial inclusion as the dependent variable, regressing it on all explanatory variables using the `lm()` function.
+
+The model summary was generated using `tbl_regression()` from the gtsummary package. The model achieved an adjusted R² of 0.835 and was statistically significant (p-value \< .05). However, when examining the statistical significance of individual independent variables, we found that while some variables were significant (e.g., proportion aged 25–34, proportion involved in agricultural businesses), others were not (e.g., employment-related variables, proportion with large households).
+
+```{r}
+finincl_mlr1 <- lm(fin_inclusion ~ age16_24 + age25_34 + age35_44 + age45_54 +
+                    gender_female + education_pri + education_sec + education_voc +
+                    education_deg + household_big + is_rural + employment_formal +
+                    employment_formal + employment_self + employment_unemployed +
+                    is_agribusiness + earned_low + earned_med + earned_high +
+                    income_source_cnt + own_mobile_phone +
+                    access_internet + digital_literacy +
+                    finliteracy_plan + finliteracy_save + finliteracy_aware,
+                data = uga_fin_sf)
+
+tbl_regression(finincl_mlr1, intercept = FALSE) %>% 
+  add_glance_source_note(label = list(sigma ~ "\U03C3"),
+                         include = c(r.squared, adj.r.squared, 
+                                     AIC, statistic,
+                                     p.value, sigma))
+```
+
+## 5.2 Checking Multicollinearity of Initial Model
+
+To assess multicollinearity, we used the `ols_vif_tol()` function to calculate the Variance Inflation Factor (VIF) for each variable. The VIF values for Digital Literacy and Internet Access exceeded 10, while Mobile Ownership was close to 10, indicating multicollinearity.
+
+```{r}
+ols_vif_tol(finincl_mlr1)
+```
+
+## 5.3 Second MLR Model
+
+Consequently, we removed the Digital Literacy variable, as it had the highest VIF value and because Mobile Ownership and Internet Access were deemed more directly associated with financial inclusion. In the second MLR model, all explantory variables except Digital Literacy were included.
+
+The second model achieved an adjusted R² of 0.837 and was statistically significant (p-value \< .05). Likewise, we observed some variables were significant (e.g., proportion aged 25–34, proportion involved in agricultural businesses), while others were not (e.g., employment-related variables, proportion with large households).
+
+```{r}
+finincl_mlr2 <- lm(fin_inclusion ~ age16_24 + age25_34 + age35_44 + age45_54 +
+                    gender_female + education_pri + education_sec + education_voc +
+                    education_deg + household_big + is_rural + employment_formal +
+                    employment_formal + employment_self + employment_unemployed +
+                    is_agribusiness + earned_low + earned_med + earned_high +
+                    income_source_cnt + own_mobile_phone + access_internet +
+                    finliteracy_plan + finliteracy_save + 
+                    finliteracy_aware,
+                data = uga_fin_sf)
+
+tbl_regression(finincl_mlr2, intercept = FALSE) %>% 
+  add_glance_source_note(label = list(sigma ~ "\U03C3"),
+                         include = c(r.squared, adj.r.squared, 
+                                     AIC, statistic,
+                                     p.value, sigma))
+```
+
+## 5.4 Checking Multicollinearity of Second Model
+
+To assess multicollinearity again. Since the VIF values for all independent variables were below 10, we conclude that there is no more multicollinearity.
+
+```{r}
+ols_vif_tol(finincl_mlr2)
+```
+
+## 5.5 Variable Selection in Third MLR Model
+
+We used the `ols_step_forward_p()` function to perform stepwise forward selection, setting a p-value threshold of 0.05 to ensure that all variables included in the final model are statistically significant.
+
+```{r}
+finincl_mlr3 <- ols_step_forward_p(finincl_mlr2,
+                                   p_val = 0.05,
+                                   details = FALSE)
+```
+
+The plot below illustrates the stepwise forward selection process, showing incremental changes in Adjusted R², AIC, and RMSE at each step.
+
+```{r}
+plot(finincl_mlr3)
+```
+
+The summary output shows that the final model includes 10 variables, achieving an adjusted R² of 0.842 and is statistically significant (p-value \< .05). All variables, except for high earned income, had p-values below 0.05; high earned income was marginally significant at 0.065. The explanatory variables in the model are:
+
+-   Proportion aged 25–34
+-   Proportion aged 35–44
+-   Proportion with secondary education
+-   Proportion involved in agricultural businesses
+-   Proportion with medium earned income
+-   Proportion with high earned income
+-   Proportion owning mobile phones
+-   Mean financial literacy score for planning/budgeting
+-   Mean financial literacy score for saving behaviors
+-   Mean financial literacy score for awareness of financial products
+
+```{r}
+tbl_regression(finincl_mlr3$model, intercept = FALSE) %>% 
+  add_glance_source_note(label = list(sigma ~ "\U03C3"),
+                         include = c(r.squared, adj.r.squared, 
+                                     AIC, statistic,
+                                     p.value, sigma))
+```
+
+## 5.6 Checking Assumptions of MLR Model
+
+Although we confirmed that multicollinearity is not present in the model, we conducted additional checks to ensure that other assumptions of multiple linear regression (MLR) were not violated.
+
+::: panel-tabset
+### Testing for Non-linearity
+
+We used the `ols_plot_resid_fit()` function to test the assumptions of linearity and additivity in the relationships between the dependent and independent variables. The resulting plot shows data points scattered around the zero line, suggesting that the relationships between the dependent and independent variables are linear.
+
+```{r}
+ols_plot_resid_fit(finincl_mlr3$model)
+```
+
+### Testing Normality of Residuals
+
+The plot below, created with the `ols_plot_resid_hist()` function, shows that the residuals approximate a normal distribution.
+
+```{r}
+ols_plot_resid_hist(finincl_mlr3$model)
+```
+
+To statistically assess normality, we used the `ols_test_normality()` function. The summary table indicates that the p-values from the Anderson-Darling, Shapiro-Wilk, and Kolmogorov-Smirnov tests are all greater than the alpha level of 0.05. Therefore, we do not reject the null hypothesis and conclude that there is insufficient evidence to suggest the residuals are non-normally distributed.
+
+```{r}
+ols_test_normality(finincl_mlr3$model)
+```
+:::
+
+## 5.7 Geovisualisation of Residuals
+
+To visualise the residuals of the MLR model on the map, we first extracted the residuals from the model, converted them into a dataframe using `as.data.frame()`, and renamed the variable for clarity. We then joined the residuals with the `uga_fin_sf` dataframe, renaming the variable again for easy readability.
+
+```{r}
+mlr_output <- as.data.frame(finincl_mlr3$model$residuals) %>%
+  rename(mlr_residuals = `finincl_mlr3$model$residuals`)
+
+uga_fin_sf1 <- cbind(uga_fin_sf, mlr_output$mlr_residuals) %>%
+  rename(mlr_residuals = `mlr_output.mlr_residuals`)
+```
+
+The plot indicates that certain clusters of districts have positive residuals (e.g. districts in the west of Uganda), suggesting a possible presence of spatial autocorrelation.
+
+```{r}
+#| code-fold: true
+tmap_mode("view")
+tm_shape(uga_fin_sf1) +
+  tm_polygons(alpha = 0.4) +
+  tm_shape(uga_fin_sf1) +  
+  tm_dots(col = "mlr_residuals",
+          alpha = 0.6,
+          style="quantile",
+          title = "MLR Residuals") +
+  tm_view(set.zoom.limits = c(6,9))
+```
+
+```{r}
+#| echo: false
+tmap_mode("plot")
+```
+
+## 5.8 Testing for Spatial Autocorrelation
+
+We use sfdep package to compute the distance weight matrix. We use `st_knn()` on the centroids, specifying 6 neighbours for each district. We then compute the distance weights using `st_weights()` function.
+
+```{r}
+uga_fin_sf1 <- uga_fin_sf1 %>%
+  mutate(nb = st_knn(centroid, k = 6, longlat = FALSE),
+         wt = st_weights(nb, style = "W"),
+         .before = "geometry")
+```
+
+To confirm the presence of spatial autocorrelation, we perform a Global Moran’s I permutation test to determine whether spatial autocorrelation exists in the residuals.
+
+-   H₀: The residuals are randomly distributed (spatially stationary).
+-   H₁: The residuals exhibit spatial dependence (spatially non-stationary).
+
+The Global Moran's I test for residual spatial autocorrelation shows that it's p-value is less than the alpha value of 0.05. Hence, we will reject the null hypothesis that the residuals are randomly distributed. Since the Observed Global Moran I = 0.11023 which is greater than 0, we can infer than the residuals resemble cluster distribution.
+
+```{r}
+set.seed(1234)
+global_moran_perm(uga_fin_sf1$mlr_residuals,
+                  uga_fin_sf1$nb,
+                  uga_fin_sf1$wt,
+                  alternative = "two.sided",
+                  nsim = 99)
+```
+
+# 6. Geograpically Weighted Regression (GWR) Model
+
+## 6.1 Fixed-Bandwidth GWR Model
+
+Given the presence of spatial autocorrelation, as demonstrated by the Global Moran’s I permutation test, we proceeded to enhance the final MLR model by incorporating spatial components.
+
+We conduct the following steps to build a fixed-bandwidth GWR model.
+
+::: panel-tabset
+### 1. Determine Optimal Fixed Bandwidth
+
+We used the `bw.gwr()` function from the GWModel package, setting the adaptive `argument` to FALSE, to determine the optimal fixed bandwidth for the model. We use bisquare kernel which is commonly used.
+
+Using the CV cross-validation approach, it shows that the recommended bandwidth is 724369.1 meters.
+
+```{r}
+bw_fixed <- bw.gwr(fin_inclusion ~ age25_34 + age35_44 + 
+                     education_sec + is_agribusiness +
+                     earned_med + earned_high + own_mobile_phone +
+                     finliteracy_plan + finliteracy_save + finliteracy_aware,
+                   data = uga_fin_sf1,
+                   approach = "CV",
+                   kernel = "bisquare",
+                   adaptive = FALSE,
+                   longlat = FALSE)
+```
+
+### 2. Build GWR model
+
+Using the optimal fixed bandwidth, we calibrated the GWR model with `gwr.basic()`. The results indicate that the AIC of the fixed-bandwidth GWR model is 68.8, which is significantly lower than that of the global MLR model (AIC = 50.4). Additionally, the GWR model achieved an adjusted R² of 0.843.
+
+```{r}
+gwr_fixed <- gwr.basic(fin_inclusion ~ age25_34 + age35_44 + 
+                         education_sec + is_agribusiness +
+                         earned_med + earned_high + own_mobile_phone +
+                         finliteracy_plan + finliteracy_save + finliteracy_aware,
+                       data = uga_fin_sf1,
+                       bw = bw_fixed, 
+                       kernel = 'bisquare', 
+                       longlat = FALSE)
+gwr_fixed
+```
+
+### 3. GWR Model (Spatial Object)
+
+Since certain functions and outputs, such as local p-values of coefficients, are not available for sf objects, we need to build the same fixed-bandwidth GWR model using a Spatial object instead.
+
+Following the [GWmodel authors’ methodology](https://mural.maynoothuniversity.ie/5752/1/MC_GWmodel.pdf), we convert the sf object to a Spatial object, then calibrate the GWR model as before. We use `gwr.t.adjust()` to compute and adjust the p-values, helping to reduce the risk of type I errors.
+
+```{r}
+uga_fin_sp <- as(uga_fin_sf1, "Spatial")
+
+gwr_fixed_sp <- gwr.basic(fin_inclusion ~ age25_34 + age35_44 + 
+                         education_sec + is_agribusiness +
+                         earned_med + earned_high + own_mobile_phone +
+                         finliteracy_plan + finliteracy_save + finliteracy_aware,
+                       data = uga_fin_sp,
+                       bw = bw_fixed, 
+                       kernel = 'bisquare', 
+                       longlat = FALSE)
+
+gwr_fixed_tadj <- gwr.t.adjust(gwr_fixed_sp)
+```
+:::
+
+## 6.2 Consolidating GWR Model Output
+
+In this step, we consolidate outputs from our GWR models to enable visualisation and further examination.
+
+First, we retrieve the SDF output from the fixed-bandwidth GWR model (sf object version), drop the geometry using `st_drop_geometry()`, convert it to a tibble with `as_tibble()`, and remove unnecessary columns.
+
+Next, we extract the Bonferroni-corrected local coefficient p-values from the Spatial object version of the GWR model. These output p-values are binary (0 or 1), where 1 indicates statistical significance. We created a function, `sig_recode`, to recode values of 1 as “significant” and values of 0 as “non-significant.”
+
+Finally, we combined these two outputs into the `uga_fin_sf1` dataframe.
+
+```{r}
+gwr_fixed_output <- gwr_fixed$SDF %>% 
+  st_drop_geometry() %>%
+  as_tibble() %>%
+  select(-c(2:11))
+
+sig_recode <- function(x) {
+  factor(if_else(x == 1, "Significant", "Non-significant"), levels = c("Non-significant","Significant"))
+}
+
+gwr_bonferroni_sig <- gwr_fixed_tadj$SDF %>%
+  as_tibble() %>% 
+  select(contains("_bo")) %>%
+  mutate_all(sig_recode)
+
+gwr_sf_fixed <- cbind(uga_fin_sf1, gwr_fixed_output, gwr_bonferroni_sig)
+```
+
+## 6.3 Visualising Local R2
+
+The map of local R² values is shown below. The plot indicates that R² values are higher in eastern Uganda and decrease toward the west, with local R² ranging from 0.817 to 0.892.
+
+```{r}
+tmap_mode("view")
+tm_shape(uga_fin_sf1) +
+  tm_polygons(alpha = 0.4) +
+  tm_shape(gwr_sf_fixed) +  
+  tm_dots(col = "Local_R2",
+          alpha = 0.6,
+          style="quantile") +
+  tm_view(set.zoom.limits = c(6,9))
+```
+
+```{r}
+#| echo: false
+tmap_mode("plot")
+```
+
+## 6.4 Visualising Residuals
+
+The map below displays the GWR residuals, which range from -0.759 to 0.753. These residuals are relatively small compared to the financial inclusion score range of 0 to 7.
+
+```{r}
+tmap_mode("view")
+tm_shape(uga_fin_sf1) +
+  tm_polygons(alpha = 0.4) +
+  tm_shape(gwr_sf_fixed) +  
+  tm_dots(col = "mlr_residuals",
+          alpha = 0.6,
+          style ="quantile",
+          title = "Residuals") +
+  tm_view(set.zoom.limits = c(6,9))
+```
+
+```{r}
+#| echo: false
+tmap_mode("plot")
+```
+
+## 6.5 Visualising Coefficients SE and p-value
+
+::: panel-tabset
+### Age (25-34)
+
+The plot shows that the p-value for the Age (25–34) variable is statistically significant across all districts. However, the standard error varies geographically, with smaller errors at the center of Uganda and increasing errors moving outward from the center.
+
+```{r}
+#| code-fold: true
+tmap_mode("view")
+SE <- tm_shape(uga_fin_sf1) +
+  tm_polygons(alpha = 0.4) +
+  tm_shape(gwr_sf_fixed) +  
+  tm_dots(col = "age25_34_SE",
+          alpha = 0.6,
+          style="quantile",
+          title = "Std Error") +
+  tm_view(set.zoom.limits = c(6,9))
+
+pval <- tm_shape(uga_fin_sf1) +
+  tm_polygons(alpha = 0.4) +
+  tm_shape(gwr_sf_fixed) +  
+  tm_dots(col = "age25_34_p_bo",
+          alpha = 0.6,
+          palette = c("lightgrey", "red"),
+          title = "Significance") +
+  tm_view(set.zoom.limits = c(6,9))
+
+tmap_arrange(SE, pval, asp=1, ncol=2, sync = TRUE)
+```
+
+```{r}
+#| echo: false
+tmap_mode("plot")
+```
+
+### Age (35-44)
+The plot shows that the p-value for the Age (35–44) variable is statistically significant in most districts, except for those in western Uganda, where it is not significant. The standard error also varies geographically, with smaller errors at the center of Uganda and increasing errors toward the outer regions.
+
+```{r}
+#| code-fold: true
+tmap_mode("view")
+SE <- tm_shape(uga_fin_sf1) +
+  tm_polygons(alpha = 0.4) +
+  tm_shape(gwr_sf_fixed) +  
+  tm_dots(col = "age35_44_SE",
+          alpha = 0.6,
+          style="quantile",
+          title = "Std Error") +
+  tm_view(set.zoom.limits = c(6,9))
+
+pval <- tm_shape(uga_fin_sf1) +
+  tm_polygons(alpha = 0.4) +
+  tm_shape(gwr_sf_fixed) +  
+  tm_dots(col = "age35_44_p_bo",
+          alpha = 0.6,
+          palette = c("lightgrey", "red"),
+          title = "Significance") +
+  tm_view(set.zoom.limits = c(6,9))
+
+tmap_arrange(SE, pval, asp=1, ncol=2, sync = TRUE)
+```
+
+```{r}
+#| echo: false
+tmap_mode("plot")
+```
+
+### Education (Sec)
+The plot shows that the p-value for the Education (Sec) variable is statistically significant across all districts. However, the standard error varies geographically, with smaller errors at the center of Uganda and increasing errors moving outward from the center.
+```{r}
+#| code-fold: true
+tmap_mode("view")
+SE <- tm_shape(uga_fin_sf1) +
+  tm_polygons(alpha = 0.4) +
+  tm_shape(gwr_sf_fixed) +  
+  tm_dots(col = "education_sec_SE",
+          alpha = 0.6,
+          style="quantile",
+          title = "Std Error") +
+  tm_view(set.zoom.limits = c(6,9))
+
+pval <- tm_shape(uga_fin_sf1) +
+  tm_polygons(alpha = 0.4) +
+  tm_shape(gwr_sf_fixed) +  
+  tm_dots(col = "education_sec_p_bo",
+          alpha = 0.6,
+          palette = c("lightgrey", "red"),
+          title = "Significance") +
+  tm_view(set.zoom.limits = c(6,9))
+
+tmap_arrange(SE, pval, asp=1, ncol=2, sync = TRUE)
+```
+
+```{r}
+#| echo: false
+tmap_mode("plot")
+```
+
+### Agriculture Business
+The plot shows that the p-value for the Agricultural Business variable is statistically significant across all districts. However, the standard error varies geographically, with smaller errors at the center of Uganda and increasing errors moving outward from the center.
+```{r}
+#| code-fold: true
+tmap_mode("view")
+SE <- tm_shape(uga_fin_sf1) +
+  tm_polygons(alpha = 0.4) +
+  tm_shape(gwr_sf_fixed) +  
+  tm_dots(col = "is_agribusiness_SE",
+          alpha = 0.6,
+          style="quantile",
+          title = "Std Error") +
+  tm_view(set.zoom.limits = c(6,9))
+
+pval <- tm_shape(uga_fin_sf1) +
+  tm_polygons(alpha = 0.4) +
+  tm_shape(gwr_sf_fixed) +  
+  tm_dots(col = "is_agribusiness_p_bo",
+          alpha = 0.6,
+          palette = c("lightgrey", "red"),
+          title = "Significance") +
+  tm_view(set.zoom.limits = c(6,9))
+
+tmap_arrange(SE, pval, asp=1, ncol=2, sync = TRUE)
+```
+
+```{r}
+#| echo: false
+tmap_mode("plot")
+```
+
+### Earned Income (Medium)
+The plot shows that the p-value for the Earned Income (Medium) variable is statistically significant across all districts. However, the standard error varies geographically, with smaller errors at the center of Uganda and increasing errors moving outward from the center.
+```{r}
+#| code-fold: true
+tmap_mode("view")
+SE <- tm_shape(uga_fin_sf1) +
+  tm_polygons(alpha = 0.4) +
+  tm_shape(gwr_sf_fixed) +  
+  tm_dots(col = "earned_med_SE",
+          alpha = 0.6,
+          style="quantile",
+          title = "Std Error") +
+  tm_view(set.zoom.limits = c(6,9))
+
+pval <- tm_shape(uga_fin_sf1) +
+  tm_polygons(alpha = 0.4) +
+  tm_shape(gwr_sf_fixed) +  
+  tm_dots(col = "earned_med_p_bo",
+          alpha = 0.6,
+          palette = c("lightgrey", "red"),
+          title = "Significance") +
+  tm_view(set.zoom.limits = c(6,9))
+
+tmap_arrange(SE, pval, asp=1, ncol=2, sync = TRUE)
+```
+
+```{r}
+#| echo: false
+tmap_mode("plot")
+```
+
+### Earned Income (High)
+We observed similar pattern for Earned Income (High) variable as well. However, we noticed that the range of standard error is higher for this variable.
+```{r}
+#| code-fold: true
+tmap_mode("view")
+SE <- tm_shape(uga_fin_sf1) +
+  tm_polygons(alpha = 0.4) +
+  tm_shape(gwr_sf_fixed) +  
+  tm_dots(col = "earned_high_SE",
+          alpha = 0.6,
+          style="quantile",
+          title = "Std Error") +
+  tm_view(set.zoom.limits = c(6,9))
+
+pval <- tm_shape(uga_fin_sf1) +
+  tm_polygons(alpha = 0.4) +
+  tm_shape(gwr_sf_fixed) +  
+  tm_dots(col = "earned_high_p_bo",
+          alpha = 0.6,
+          palette = c("lightgrey", "red"),
+          title = "Significance") +
+  tm_view(set.zoom.limits = c(6,9))
+
+tmap_arrange(SE, pval, asp=1, ncol=2, sync = TRUE)
+```
+
+```{r}
+#| echo: false
+tmap_mode("plot")
+```
+
+### Own Mobile Phone
+We observed similar pattern for Own Mobile Phone variable as well.
+```{r}
+#| code-fold: true
+tmap_mode("view")
+SE <- tm_shape(uga_fin_sf1) +
+  tm_polygons(alpha = 0.4) +
+  tm_shape(gwr_sf_fixed) +  
+  tm_dots(col = "own_mobile_phone_SE",
+          alpha = 0.6,
+          style="quantile",
+          title = "Std Error") +
+  tm_view(set.zoom.limits = c(6,9))
+
+pval <- tm_shape(uga_fin_sf1) +
+  tm_polygons(alpha = 0.4) +
+  tm_shape(gwr_sf_fixed) +  
+  tm_dots(col = "own_mobile_phone_p_bo",
+          alpha = 0.6,
+          palette = c("lightgrey", "red"),
+          title = "Significance") +
+  tm_view(set.zoom.limits = c(6,9))
+
+tmap_arrange(SE, pval, asp=1, ncol=2, sync = TRUE)
+```
+
+```{r}
+#| echo: false
+tmap_mode("plot")
+```
+
+### Financial Literacy (Planning & Budgeting)
+We observed similar pattern for Financial Literacy (Planning & Budgeting) variable as well.
+```{r}
+#| code-fold: true
+tmap_mode("view")
+SE <- tm_shape(uga_fin_sf1) +
+  tm_polygons(alpha = 0.4) +
+  tm_shape(gwr_sf_fixed) +  
+  tm_dots(col = "finliteracy_plan_SE",
+          alpha = 0.6,
+          style="quantile",
+          title = "Std Error") +
+  tm_view(set.zoom.limits = c(6,9))
+
+pval <- tm_shape(uga_fin_sf1) +
+  tm_polygons(alpha = 0.4) +
+  tm_shape(gwr_sf_fixed) +  
+  tm_dots(col = "finliteracy_plan_p_bo",
+          alpha = 0.6,
+          palette = c("lightgrey", "red"),
+          title = "Significance") +
+  tm_view(set.zoom.limits = c(6,9))
+
+tmap_arrange(SE, pval, asp=1, ncol=2, sync = TRUE)
+```
+
+```{r}
+#| echo: false
+tmap_mode("plot")
+```
+
+### Financial Literacy (Saving Behaviour)
+The plot shows that the p-value for the Financial Literacy (Saving Behaviour) variable is statistically significant in most districts, except for a few in southern Uganda, where it is not significant. The standard error also varies geographically, with smaller errors at the center of Uganda and increasing errors toward the outer regions.
+```{r}
+#| code-fold: true
+tmap_mode("view")
+SE <- tm_shape(uga_fin_sf1) +
+  tm_polygons(alpha = 0.4) +
+  tm_shape(gwr_sf_fixed) +  
+  tm_dots(col = "finliteracy_save_SE",
+          alpha = 0.6,
+          style="quantile",
+          title = "Std Error") +
+  tm_view(set.zoom.limits = c(6,9))
+
+pval <- tm_shape(uga_fin_sf1) +
+  tm_polygons(alpha = 0.4) +
+  tm_shape(gwr_sf_fixed) +  
+  tm_dots(col = "finliteracy_save_p_bo",
+          alpha = 0.6,
+          palette = c("lightgrey", "red"),
+          title = "Significance") +
+  tm_view(set.zoom.limits = c(6,9))
+
+tmap_arrange(SE, pval, asp=1, ncol=2, sync = TRUE)
+```
+
+```{r}
+#| echo: false
+tmap_mode("plot")
+```
+
+### Financial Literacy (Awareness of Financial Products)
+The plot shows that the p-value for the Financial Literacy (Awareness of Financial Products) variable is non-statistically significant in all the districts.
+```{r}
+#| code-fold: true
+tmap_mode("view")
+SE <- tm_shape(uga_fin_sf1) +
+  tm_polygons(alpha = 0.4) +
+  tm_shape(gwr_sf_fixed) +  
+  tm_dots(col = "finliteracy_aware_SE",
+          alpha = 0.6,
+          style="quantile",
+          title = "Std Error") +
+  tm_view(set.zoom.limits = c(6,9))
+
+pval <- tm_shape(uga_fin_sf1) +
+  tm_polygons(alpha = 0.4) +
+  tm_shape(gwr_sf_fixed) +  
+  tm_dots(col = "finliteracy_aware_p_bo",
+          alpha = 0.6,
+          palette = c("lightgrey", "red"),
+          title = "Significance") +
+  tm_view(set.zoom.limits = c(6,9))
+
+tmap_arrange(SE, pval, asp=1, ncol=2, sync = TRUE)
+```
+
+```{r}
+#| echo: false
+tmap_mode("plot")
+```
+:::
+
+# 7. Concluding Remarks
+This study employed multiple linear regression (MLR) and geographically weighted regression (GWR) to identify factors influencing financial inclusion at the district level in Uganda. Using stepwise forward selection, the following variables were found to explain financial inclusion:
+
+-   Proportion aged 25–34
+-   Proportion aged 35–44
+-   Proportion with secondary education
+-   Proportion involved in agricultural businesses
+-   Proportion with medium earned income
+-   Proportion with high earned income
+-   Proportion owning mobile phones
+-   Mean financial literacy score for planning/budgeting
+-   Mean financial literacy score for saving behaviors
+-   Mean financial literacy score for awareness of financial products
+
+The Global Moran’s I permutation test confirmed the presence of spatial autocorrelation, indicating geographical variation in the factors explaining financial inclusion. In the GWR model, all MLR variables, except for financial literacy on awareness of financial products, remained significant predictors. Notably, some variables, such as the proportion aged 35–44 and financial literacy on saving behaviors, were not significant in certain districts, highlighting the importance of accounting for local variations.
+
+This study demonstrates the value of geographically weighted regression in capturing spatial nuances within an explanatory model of financial inclusion. However, a limitation lies in the ambiguity regarding causation; it remains unclear whether higher financial literacy is a result of greater access to financial services within certain districts, or if these factors are mutually reinforcing. Future research could further explore these relationships to better understand the directionality and potential interactions among these predictors.
+
+In conclusion, this study underscores the complexity of financial inclusion and the need for geographically tailored approaches in policy-making to address district-specific needs across Uganda.
+
+# Reference
+- FSD Uganda (2023). Datasets - FinScope Uganda 2023 Survey. <https://fsduganda.or.ug/data-sets-finscope-uganda-2023-survey-report/>
+
+- FSD Uganda (2024). FinScope Uganda Findings 2023. <https://fsduganda.or.ug/finscope-uganda-2023-survey/>
+
+- Hamdan, J. S., Lehmann-Uschner, K., & Menkhoff, L. (2022). Mobile money, financial inclusion, and unmet opportunities: Evidence from Uganda. The Journal of Development Studies 58(4).
+
+- Kaliba, A. R., Bishagazi, K. P., & Gongwe, A. G. (2023). Financial inclusion determinants, barriers, and impact. The Journal of Developing Areas 57(2). 
+
+- Lu, B., Harris, P., Charlton, M., & Brunsdon, C. (n.d.). The GWmodel R package: Further topics for exploring spatial heterogeneity using geographically weighted models. <https://mural.maynoothuniversity.ie/5752/1/MC_GWmodel.pdf>
+
+- Nguyen NT, Nguyen HS, Ho CM, Vo DH (2021). The convergence of financial inclusion
+across provinces in Vietnam: A novel approach. PLoS ONE 16(8): e0256524. <https://doi.org/10.1371/journal.pone.0256524>
+
+- Runfola, D. et al. (2020) geoBoundaries: A global database of political administrative boundaries. PLoS ONE 15(4): e0231866. <https://doi.org/10.1371/journal.pone.0231866>
+
