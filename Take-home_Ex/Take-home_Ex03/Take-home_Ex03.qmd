@@ -27,7 +27,7 @@ Although previous studies have explored factors influencing financial inclusion,
 This study utilises two key datasets:
 
 -   [**FinScope Uganda 2023 Survey Dataset**](https://fsduganda.or.ug/data-sets-finscope-uganda-2023-survey-report/): This aspatial dataset includes responses from 3,176 Ugandan adults (aged 16 and older), providing insights into attitudes and behaviors around money management, financial products, and services. Respondents were selected through a rigorous stratified sampling process to ensure representativeness.
--   **Uganda District Boundaries (2020)**: Geographical boundary data obtained from [geoBoundaries](www.geoboundaries.org), detailing the administrative district boundaries across Uganda.
+-   **Uganda District Boundaries (2020)**: Geographical boundary data obtained from [geoBoundaries](https://www.geoboundaries.org), detailing the administrative district boundaries across Uganda.
 
 ## 1.3 R Packages
 
@@ -71,8 +71,7 @@ head(fin_df)
 
 To prepare the data for analysis, the analyst conducted distribution checks and addressed missing data (included coded values like 999), ensuring proper data treatment. For brevity, preliminary analyses, including distribution analysis, are not shown in this report. However, all steps were carefully executed to ensure data readiness.
 
-::: panel-tabset
-## 1. Demographics
+## 2.1 Demographics
 
 Demographic variables in this study include:
 
@@ -115,7 +114,7 @@ fin_df1 <- fin_df %>%
   select(-c(age, gender, education, household_size, rural_urban, employment, agribusiness))
 ```
 
-## 2. Earned Income
+## 2.2 Earned Income
 
 To determine individuals’ earned income, the following steps were performed:
 
@@ -168,7 +167,7 @@ fin_df2 <- fin_df2 %>%
             employment_nonworking))
 ```
 
-## 3. Digital Connectivity & Literacy
+## 2.3 Digital Connectivity & Literacy
 
 For digital connectivity and literacy, we considered three variables:
 
@@ -189,7 +188,7 @@ fin_df3 <- fin_df2 %>%
   select(-c(is_smartphone, literacy_mobile, literacy_internet))
 ```
 
-## 4A. Financial Literacy (Planning/Budgeting)
+## 2.4.1 Financial Literacy (Planning/Budgeting)
 
 Financial literacy is multifaceted and encompasses several dimensions. In this study, we assessed financial literacy through three key aspects, calculating a score for each:
 
@@ -223,7 +222,7 @@ fin_df4 <- fin_df3 %>%
             finliteracy_plan4, finliteracy_plan5))
 ```
 
-## 4B. Financial Literacy (Saving Behaviours)
+## 2.4.2 Financial Literacy (Saving Behaviours)
 
 For **Saving Behaviours**, we computed a composite mean score for each individual based on their responses to the following three survey questions:
 
@@ -244,7 +243,7 @@ fin_df4 <- fin_df4 %>%
   select(-c(finliteracy_save1, finliteracy_save2, finliteracy_save3))
 ```
 
-## 4C. Financial Literacy (Awareness of Financial Products)
+## 2.4.3 Financial Literacy (Awareness of Financial Products)
 
 For **Awareness of Financial Products**, we computed a composite mean score for each individual based on their awareness of the following common financial products:
 
@@ -274,7 +273,7 @@ fin_df4 <- fin_df4 %>%
             finliteracy_aware4, finliteracy_aware5, finliteracy_aware6))
 ```
 
-## 5A. Financial Inclusion (Insurance Products)
+## 2.5.1 Financial Inclusion (Insurance Products)
 
 We followed the methodology used by Nguyen et al. (2021) to calculate a composite score for **financial inclusion**, focusing on aspects aligned with its core definition:
 
@@ -298,7 +297,7 @@ fin_df5 <- fin_df4 %>%
   relocate(finincl_risk, .after = last_col()) 
 ```
 
-## 5B. Financial Inclusion (Savings Mechanisms)
+## 2.5.2 Financial Inclusion (Savings Mechanisms)
 
 For **Savings Mechanism**, we computed a composite score (maximum 2 points) for each individual based on responses to the following common saving mechanisms:
 
@@ -338,7 +337,7 @@ fin_df5 <- fin_df5 %>%
             finincl_save7, finincl_save8, finincl_save9))
 ```
 
-## 5C. Financial Inclusion (Remittance Services)
+## 2.5.3 Financial Inclusion (Remittance Services)
 
 For **Remittance Services**, we computed a composite score (maximum 1 point) for each individual based on responses to the following 2 questions:
 
@@ -355,7 +354,7 @@ fin_df5 <- fin_df5 %>%
   select(-c(finincl_remit1, finincl_remit2))
 ```
 
-## 5D. Financial Inclusion (Payment Channels)
+## 2.5.4 Financial Inclusion (Payment Channels)
 
 For **Payment Channels**, we computed a composite score (maximum 2 points) for each individual based on their usage to the following 5 common payment channels in the last 12 months:
 
@@ -383,7 +382,7 @@ fin_df5 <- fin_df5 %>%
             finincl_pay4, finincl_pay5))
 ```
 
-## 5E. Financial Inclusion (Credit)
+## 2.5.4 Financial Inclusion (Credit)
 
 For **Credits**, we computed a composite score (maximum 1 point) for each individual based on responses to the following 5 questions:
 
@@ -408,7 +407,7 @@ fin_df5 <- fin_df5 %>%
                              finincl_loan4, finincl_loan5))
 ```
 
-## 5F. Total Financial Inclusion
+## 2.5.6 Total Financial Inclusion
 
 The total score for financial inclusion was a summation of their scores to:
 
@@ -427,7 +426,7 @@ fin_df5 <- fin_df5 %>%
 head(fin_df5)
 ```
 
-## 6. Checking Missing Data
+## 2.6 Checking Missing Data
 
 Before aggregating scores at the district level, we examined the percentage of missing data across variables. Employment-related variables have 0.6% missing data, while earned income variables have 12.7%. All other variables are complete. The level of missing data is considered acceptable, and cases with missing values were retained. During district-level aggregation for employment and earned income, missing values were ignored in the calculation of the mean, effectively imputing the mean for these cases.
 
@@ -435,7 +434,7 @@ Before aggregating scores at the district level, we examined the percentage of m
 colMeans(is.na(fin_df5))
 ```
 
-## 7. Aggregation to District Level
+## 2.7 Aggregation to District Level
 
 In the final step of data wrangling, we convert district names to sentence case using `str_to_sentence()` function.
 
@@ -477,7 +476,6 @@ fin_df6 <- fin_df5 %>%
 ```{r}
 head(fin_df6)
 ```
-:::
 
 # 3. Geospatial data: Importing & Data Wrangling
 
