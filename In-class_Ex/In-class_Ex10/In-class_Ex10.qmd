@@ -14,9 +14,9 @@ execute:
 
 # Overview
 
-In this exercise, we will walk through the steps of **Spatial Interaction analysis** and highlight key tips in Sections 1-4. This exercise follows a similar approach to [Hands-on Ex 9A](https://geospatialanalytics-stephentay.netlify.app/hands-on_ex/hands-on_ex09/hands-on_ex09a) and [9B](https://geospatialanalytics-stephentay.netlify.app/hands-on_ex/hands-on_ex09/hands-on_ex09b).
+In this exercise, we will walk through the steps of **Spatial Interaction analysis** and highlight key tips in **Sections 1-4**. This exercise follows a similar approach to [Hands-on Ex 9A](https://geospatialanalytics-stephentay.netlify.app/hands-on_ex/hands-on_ex09/hands-on_ex09a) and [9B](https://geospatialanalytics-stephentay.netlify.app/hands-on_ex/hands-on_ex09/hands-on_ex09b).
 
-In Section 6, we will walk through the steps on using postal codes for geocoding.
+In **Section 5**, we will walk through the steps on using postal codes for geocoding.
 
 ```{r}
 pacman::p_load(tmap, sf, sp, DT, stplanr, performance, reshape2, ggpubr, tidyverse)
